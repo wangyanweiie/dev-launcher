@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Dev Launcher</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <header class="header">
+            <div class="header-left">
+                <h1>Dev Launcher</h1>
+                <p class="subtitle" id="scan-root"></p>
+            </div>
+            <div class="header-actions">
+                <input
+                    type="search"
+                    id="project-search"
+                    class="search-input"
+                    placeholder="搜索项目…"
+                    autocomplete="off"
+                />
+                <button type="button" class="btn btn-ghost" id="btn-refresh" title="强制重新扫描">刷新</button>
+                <button type="button" class="btn btn-danger" id="btn-stop-all">全部停止</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div id="loading" class="loading">正在扫描项目…</div>
+            <nav id="category-tabs" class="category-tabs" hidden></nav>
+            <div id="project-list" class="project-list"></div>
+        </main>
+
+        <aside class="sidebar-panel" id="sidebar-panel">
+            <section class="services-panel">
+                <div class="services-header">
+                    <span>运行中的服务</span>
+                    <span class="services-count" id="services-count">0</span>
+                </div>
+                <div id="services-list" class="services-list"></div>
+            </section>
+            <section class="log-panel" id="log-panel">
+                <div class="log-header">
+                    <span id="log-title">日志</span>
+                    <button type="button" class="btn-icon" id="btn-clear-log" title="清空">×</button>
+                </div>
+                <pre class="log-body" id="log-body"></pre>
+            </section>
+        </aside>
+
+        <script src="/app.js" type="module"></script>
+    </body>
+</html>

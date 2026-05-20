@@ -1,0 +1,358 @@
+/**
+ * 进程运行模块
+ * 负责启动/停止 dev 脚本子进程，采集日志与本地访问地址
+ */
+
+import { spawn, type ChildProcess } from 'node:child_process';
+import { exec } from 'node:child_process';
+import path from 'node:path';
+import type { PackageManager } from './scanner.js';
+
+/** 进程运行状态 */
+export type ProcessStatus = 'running' | 'stopped' | 'crashed';
+
+/** 正在运行或曾运行的任务元信息 */
+export interface RunningTask {
+    /** 任务唯一 ID */
+    taskId: string;
+    /** 工作目录 */
+    cwd: string;
+    /** 脚本名 */
+    scriptName: string;
+    /** 包管理器 */
+    packageManager: PackageManager;
+    /** 子进程 PID */
+    pid?: number;
+    /** 启动时间戳 */
+    startedAt: number;
+    /** 当前状态 */
+    status: ProcessStatus;
+    /** 从日志解析出的本地访问地址 */
+    url?: string;
+    /** 退出码（崩溃时） */
+    exitCode?: number | null;
+}
+
+/** 启动结果 */
+export interface StartTaskResult {
+    meta: RunningTask;
+    /** 任务已在运行，未重复启动 */
+    alreadyRunning?: boolean;
+}
+
+/** 日志行回调 */
+type LogListener = (taskId: string, line: string) => void;
+/** 状态变更回调 */
+type StatusListener = (
+    taskId: string,
+    status: ProcessStatus,
+    exitCode?: number | null,
+) => void;
+/** 访问地址解析回调 */
+type UrlListener = (taskId: string, url: string) => void;
+
+/** 匹配本地开发服务器 URL 的正则 */
+const URL_RE =
+    /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:\/[^\s)\]'">]*)?/gi;
+
+/**
+ * 去除终端 ANSI 颜色控制符
+ * @param text - 原始文本
+ */
+function stripAnsi(text: string): string {
+    return text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+}
+
+/**
+ * 规范化解析出的 URL
+ * @param raw - 原始匹配串
+ */
+function normalizeUrl(raw: string): string | null {
+    const cleaned = raw.replace(/[.,;]+$/, '');
+    try {
+        const u = new URL(cleaned);
+        if (u.hostname === '0.0.0.0') u.hostname = 'localhost';
+        return u.origin + (u.pathname === '/' ? '' : u.pathname);
+    } catch {
+        return cleaned;
+    }
+}
+
+/**
+ * 从日志行中提取最合适的本地访问 URL（优先带端口）
+ * @param line - 单行日志
+ */
+export function extractUrl(line: string): string | null {
+    const clean = stripAnsi(line);
+    const matches = clean.match(URL_RE);
+    if (!matches?.length) return null;
+
+    const normalized = matches
+        .map(normalizeUrl)
+        .filter((u): u is string => !!u);
+
+    if (!normalized.length) return null;
+
+    const withPort = normalized.filter((u) => /:\d+/.test(u));
+    return withPort.length ? withPort[withPort.length - 1] : normalized[normalized.length - 1];
+}
+
+/**
+ * 新 URL 是否优于已记录的（用于后续日志覆盖无端口地址）
+ */
+function isBetterUrl(current: string | undefined, next: string): boolean {
+    if (!current) return true;
+    const curHasPort = /:\d+/.test(current);
+    const nextHasPort = /:\d+/.test(next);
+    if (!curHasPort && nextHasPort) return true;
+    return false;
+}
+
+/** 运行中的子进程映射：taskId -> { proc, meta } */
+const processes = new Map<string, { proc: ChildProcess; meta: RunningTask }>();
+
+/** 进程结束后的最近状态（用于 crashed 展示，下次启动前保留） */
+const lastKnownState = new Map<
+    string,
+    { status: ProcessStatus; exitCode?: number | null }
+>();
+
+/** 日志监听器 */
+let onLog: LogListener = () => {};
+/** 状态监听器 */
+let onStatus: StatusListener = () => {};
+/** URL 监听器 */
+let onUrl: UrlListener = () => {};
+
+/**
+ * 注册进程事件监听器（由 HTTP 层转发到 WebSocket）
+ * @param listeners - 日志、状态、URL 回调
+ */
+export function setRunnerListeners(listeners: {
+    onLog?: LogListener;
+    onStatus?: StatusListener;
+    onUrl?: UrlListener;
+}): void {
+    if (listeners.onLog) onLog = listeners.onLog;
+    if (listeners.onStatus) onStatus = listeners.onStatus;
+    if (listeners.onUrl) onUrl = listeners.onUrl;
+}
+
+/**
+ * 根据包管理器构建启动命令
+ * @param pm - 包管理器
+ * @param scriptName - 脚本名
+ */
+function buildArgs(pm: PackageManager, scriptName: string): { cmd: string; args: string[] } {
+    switch (pm) {
+        case 'pnpm':
+            return { cmd: 'pnpm', args: ['run', scriptName] };
+        case 'yarn':
+            return { cmd: 'yarn', args: [scriptName] };
+        default:
+            return { cmd: 'npm', args: ['run', scriptName] };
+    }
+}
+
+/**
+ * 获取已存在的运行中任务
+ * @param taskId - 任务 ID
+ */
+export function getRunningTask(taskId: string): RunningTask | undefined {
+    return processes.get(taskId)?.meta;
+}
+
+/**
+ * 启动一个 dev/serve 任务；若已在运行则返回现有任务
+ * @param taskId - 任务 ID
+ * @param cwd - 工作目录
+ * @param scriptName - 脚本名
+ * @param packageManager - 包管理器
+ */
+export function startTask(
+    taskId: string,
+    cwd: string,
+    scriptName: string,
+    packageManager: PackageManager,
+): StartTaskResult {
+    const existing = processes.get(taskId);
+    if (existing) {
+        return { meta: existing.meta, alreadyRunning: true };
+    }
+
+    lastKnownState.delete(taskId);
+
+    const resolvedCwd = path.resolve(cwd);
+    const { cmd, args } = buildArgs(packageManager, scriptName);
+    const proc = spawn(cmd, args, {
+        cwd: resolvedCwd,
+        detached: process.platform !== 'win32',
+        env: { ...process.env, FORCE_COLOR: '1' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (process.platform !== 'win32') {
+        proc.unref();
+    }
+
+    const meta: RunningTask = {
+        taskId,
+        cwd: resolvedCwd,
+        scriptName,
+        packageManager,
+        pid: proc.pid,
+        startedAt: Date.now(),
+        status: 'running',
+    };
+
+    processes.set(taskId, { proc, meta });
+
+    /** 将 stdout/stderr 按行推送，并尝试解析 URL */
+    const pushLog = (chunk: Buffer | string) => {
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+            const visible = stripAnsi(line).trim();
+            if (!visible) continue;
+            onLog(taskId, visible);
+            const url = extractUrl(line);
+            if (url && isBetterUrl(meta.url, url)) {
+                meta.url = url;
+                onUrl(taskId, url);
+            }
+        }
+    };
+
+    proc.stdout?.on('data', pushLog);
+    proc.stderr?.on('data', pushLog);
+
+    proc.on('exit', (code, signal) => {
+        processes.delete(taskId);
+        const crashed = code !== 0 && code !== null;
+        meta.status = crashed ? 'crashed' : 'stopped';
+        meta.exitCode = code;
+        meta.url = undefined;
+        lastKnownState.set(taskId, { status: meta.status, exitCode: code });
+        onStatus(taskId, meta.status, code);
+        if (crashed) {
+            const hint = signal ? `信号 ${signal}` : `退出码 ${code}`;
+            onLog(taskId, `[dev-launcher] 进程已异常退出 (${hint})`);
+        }
+    });
+
+    onStatus(taskId, 'running');
+    onLog(taskId, `[dev-launcher] 已启动: ${cmd} ${args.join(' ')} (cwd: ${cwd})`);
+
+    return { meta };
+}
+
+/**
+ * 终止进程及其子进程（npm/vite 等）
+ * @param pid - 根进程 PID
+ */
+function killProcessTree(pid: number): void {
+    if (!pid || pid <= 0) return;
+
+    if (process.platform === 'win32') {
+        exec(`taskkill /PID ${pid} /T /F`, () => {});
+        return;
+    }
+
+    const term = `(pkill -TERM -P ${pid} 2>/dev/null; kill -TERM ${pid} 2>/dev/null; kill -TERM -${pid} 2>/dev/null) || true`;
+    exec(term, () => {});
+
+    setTimeout(() => {
+        const kill = `(pkill -KILL -P ${pid} 2>/dev/null; kill -KILL ${pid} 2>/dev/null) || true`;
+        exec(kill, () => {});
+    }, 1200);
+}
+
+/**
+ * 停止指定任务
+ * @param taskId - 任务 ID
+ */
+export function stopTask(taskId: string): boolean {
+    const entry = processes.get(taskId);
+    if (!entry) return false;
+
+    const { proc } = entry;
+    const pid = proc.pid;
+
+    try {
+        proc.kill('SIGTERM');
+    } catch {
+        /* 已由 killProcessTree 处理 */
+    }
+
+    if (pid) killProcessTree(pid);
+
+    entry.meta.url = undefined;
+    entry.meta.status = 'stopped';
+    processes.delete(taskId);
+    lastKnownState.set(taskId, { status: 'stopped' });
+    onStatus(taskId, 'stopped');
+    onLog(taskId, '[dev-launcher] 已停止');
+    return true;
+}
+
+/**
+ * 获取所有正在运行的任务列表
+ */
+export function getRunningTasks(): RunningTask[] {
+    return [...processes.values()].map((e) => e.meta);
+}
+
+/**
+ * 查询单个任务状态
+ * @param taskId - 任务 ID
+ */
+export function getTaskStatus(taskId: string): ProcessStatus {
+    if (processes.has(taskId)) return 'running';
+    return lastKnownState.get(taskId)?.status ?? 'stopped';
+}
+
+/**
+ * 获取任务退出码（仅 crashed/stopped 后有值）
+ * @param taskId - 任务 ID
+ */
+export function getTaskExitCode(taskId: string): number | null | undefined {
+    return lastKnownState.get(taskId)?.exitCode;
+}
+
+/**
+ * 批量查询任务状态
+ * @param taskIds - 任务 ID 列表
+ */
+export function getAllStatuses(taskIds: string[]): Record<string, ProcessStatus> {
+    const result: Record<string, ProcessStatus> = {};
+    for (const id of taskIds) {
+        result[id] = getTaskStatus(id);
+    }
+    return result;
+}
+
+/**
+ * 收集 Launcher 管理中的监听端口
+ */
+export function getManagedPorts(): Set<number> {
+    const ports = new Set<number>();
+    for (const { meta } of processes.values()) {
+        if (meta.url) {
+            try {
+                const p = new URL(meta.url).port;
+                if (p) ports.add(Number(p));
+            } catch {
+                /* ignore */
+            }
+        }
+    }
+    return ports;
+}
+
+/**
+ * 停止所有正在运行的任务
+ */
+export function stopAll(): void {
+    for (const id of [...processes.keys()]) {
+        stopTask(id);
+    }
+}

@@ -1,0 +1,109 @@
+/**
+ * 全局共享状态
+ */
+
+/** @typedef {import('./types.js').DevScript} DevScript */
+/** @typedef {import('./types.js').SubProject} SubProject */
+/** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
+
+/** 各任务运行状态 */
+/** @type {Record<string, 'running' | 'stopped' | 'crashed'>} */
+export let statuses = {};
+
+/** 崩溃任务退出码 */
+/** @type {Record<string, number>} */
+export let taskExitCodes = {};
+
+/** Company 目录下的历史/外部监听服务 */
+/** @type {import('./types.js').OrphanService[]} */
+export let orphanServices = [];
+
+/** 扫描错误信息 */
+export let scanError = null;
+
+/** 搜索关键词 */
+export let searchQuery = '';
+
+/** 各任务本地访问地址 */
+/** @type {Record<string, string>} */
+export let taskUrls = {};
+
+/** 默认配置 */
+/** @type {Record<string, { subKey: string; script: string }>} */
+export let projectDefaults = {};
+
+/** 项目副本列表 */
+/** @type {Record<string, import('./types.js').ProjectInstance[]>} */
+export let projectInstances = {};
+
+/** 当前日志聚焦任务 */
+export let activeLogTask = null;
+
+/** 日志缓冲 */
+/** @type {{ taskId: string; line: string }[]} */
+export const logLines = [];
+
+/** 日志最大行数 */
+export const MAX_LOG = 500;
+
+/** 用户手动展开的项目 */
+export const userExpanded = new Set();
+
+/** 用户手动折叠的项目 */
+export const userCollapsed = new Set();
+
+/** 全部项目分组 */
+/** @type {import('./types.js').ProjectGroup[]} */
+export let allGroups = [];
+
+/** 当前 Tab 分类 */
+export let activeCategory = 'App';
+
+/**
+ * 设置当前 Tab
+ * @param {string} category
+ */
+export function setActiveCategory(category) {
+    activeCategory = category;
+}
+
+/**
+ * 设置当前日志任务
+ * @param {string | null} taskId
+ */
+export function setActiveLogTask(taskId) {
+    activeLogTask = taskId;
+}
+
+/** 分类列表 */
+/** @type {string[]} */
+export let categories = ['App', 'Pc'];
+
+/**
+ * 批量更新任务状态相关数据
+ * @param {object} data - API 返回片段
+ */
+/**
+ * 设置搜索词
+ * @param {string} q
+ */
+export function setSearchQuery(q) {
+    searchQuery = q;
+}
+
+export function applyProjectsPayload(data) {
+    statuses = data.statuses || {};
+    taskExitCodes = data.exitCodes || {};
+    taskUrls = data.urls || {};
+    projectDefaults = data.defaults || {};
+    projectInstances = data.instances || {};
+    allGroups = data.groups || [];
+    orphanServices = data.orphans || [];
+    scanError = data.scanError || null;
+    if (data.running) {
+        for (const t of data.running) {
+            statuses[t.taskId] = 'running';
+            if (t.url) taskUrls[t.taskId] = t.url;
+        }
+    }
+}

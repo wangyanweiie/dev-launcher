@@ -1,0 +1,133 @@
+/**
+ * APP / PC 分类 Tab
+ */
+
+import { tabsEl, listEl } from './dom.js';
+import { collectSubProjects } from './project.js';
+import { renderProjectGroup } from './render.js';
+import {
+    activeCategory,
+    allGroups,
+    categories,
+    statuses,
+} from './state.js';
+import { groupMatchesFilter } from './filter.js';
+import { searchQuery } from './state.js';
+import { escapeHtml, makeTaskId } from './utils.js';
+
+/** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
+
+/**
+ * Tab 显示名
+ * @param {string} category
+ */
+export function categoryTabLabel(category) {
+    if (category === 'App') return 'APP';
+    if (category === 'Pc') return 'PC';
+    return category;
+}
+
+/**
+ * 分组是否有运行中任务
+ * @param {ProjectGroup} group
+ */
+export function groupHasRunning(group) {
+    for (const item of collectSubProjects(group)) {
+        for (const s of item.sub.scripts) {
+            const st = statuses[makeTaskId(item.sub.cwd, s.name)];
+            if (st === 'running' || st === 'crashed') return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * 选择默认 Tab
+ */
+export function pickDefaultCategory() {
+    for (const cat of categories) {
+        if (allGroups.filter((g) => g.category === cat).some(groupHasRunning)) {
+            return cat;
+        }
+    }
+    return categories[0] ?? 'App';
+}
+
+/**
+ * 分类下运行中项目数
+ * @param {string} category
+ */
+export function countRunningInCategory(category) {
+    return allGroups.filter((g) => g.category === category).filter(groupHasRunning).length;
+}
+
+/**
+ * 渲染 Tab 栏
+ */
+export function renderCategoryTabs() {
+    if (!tabsEl || categories.length < 2) {
+        if (tabsEl) tabsEl.hidden = true;
+        return;
+    }
+
+    tabsEl.hidden = false;
+    tabsEl.innerHTML = categories
+        .map((cat) => {
+            const count = allGroups.filter((g) => g.category === cat).length;
+            const running = countRunningInCategory(cat) > 0;
+            const active = cat === activeCategory ? ' active' : '';
+            const runningMark = running
+                ? '<span class="tab-running-dot" title="有运行中项目"></span>'
+                : '';
+            return `<button type="button" class="category-tab${active}" data-tab="${escapeHtml(cat)}"
+                role="tab" aria-selected="${cat === activeCategory}">
+                ${categoryTabLabel(cat)}
+                <span class="tab-count">${count}</span>
+                ${runningMark}
+            </button>`;
+        })
+        .join('');
+}
+
+/**
+ * 仅更新 Tab 指示器
+ */
+export function updateCategoryTabIndicators() {
+    if (!tabsEl || tabsEl.hidden) return;
+    tabsEl.querySelectorAll('[data-tab]').forEach((btn) => {
+        const cat = btn.getAttribute('data-tab');
+        if (!cat) return;
+        btn.classList.toggle('active', cat === activeCategory);
+        btn.setAttribute('aria-selected', String(cat === activeCategory));
+        let dot = btn.querySelector('.tab-running-dot');
+        const running = countRunningInCategory(cat) > 0;
+        if (running && !dot) {
+            dot = document.createElement('span');
+            dot.className = 'tab-running-dot';
+            dot.title = '有运行中项目';
+            btn.appendChild(dot);
+        } else if (!running && dot) {
+            dot.remove();
+        }
+    });
+}
+
+/**
+ * 渲染当前 Tab 项目列表 HTML（事件绑定由 api 层负责）
+ */
+export function renderActiveCategoryListHtml() {
+    const inCategory = allGroups.filter((g) => g.category === activeCategory);
+    const filtered = inCategory.filter((g) => groupMatchesFilter(g, searchQuery));
+
+    if (!inCategory.length) {
+        listEl.innerHTML = `<p class="loading">「${categoryTabLabel(activeCategory)}」下未找到含 dev/serve 脚本的项目</p>`;
+        return;
+    }
+
+    if (!filtered.length) {
+        listEl.innerHTML = `<p class="loading">没有匹配「${escapeHtml(searchQuery)}」的项目</p>`;
+        return;
+    }
+
+    listEl.innerHTML = filtered.map(renderProjectGroup).join('');
+}

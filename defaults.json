@@ -1,0 +1,34 @@
+{
+    "/Users/lemon/Company/App/leyuan_app": {
+        "subKey": "/Users/lemon/Company/App/leyuan_app",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/App/lvling_app": {
+        "subKey": "/Users/lemon/Company/App/lvling_app",
+        "script": "serve"
+    },
+    "/Users/lemon/Company/App/wanhua_app": {
+        "subKey": "/Users/lemon/Company/App/wanhua_app",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/Pc/nandateqi_pc": {
+        "subKey": "/Users/lemon/Company/Pc/nandateqi_pc",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/Pc/wanhua_pc": {
+        "subKey": "/Users/lemon/Company/Pc/wanhua_pc",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/Pc/x-mart": {
+        "subKey": "/Users/lemon/Company/Pc/x-mart/apps/leyuan",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/Pc/xmart-web": {
+        "subKey": "/Users/lemon/Company/Pc/xmart-web/apps/app",
+        "script": "dev"
+    },
+    "/Users/lemon/Company/Pc/xmart-web::c-1779276515538-6mwqme": {
+        "subKey": "/Users/lemon/Company/Pc/xmart-web/apps/web",
+        "script": "dev"
+    }
+}

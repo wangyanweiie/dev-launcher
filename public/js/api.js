@@ -1,0 +1,87 @@
+/**
+ * 后端 API 与项目列表加载
+ */
+
+import { loadingEl, listEl, tabsEl } from './dom.js';
+import {
+    applyProjectsPayload,
+    activeCategory,
+    categories,
+    setActiveCategory,
+    userCollapsed,
+    userExpanded,
+    allGroups,
+    scanError,
+} from './state.js';
+import {
+    pickDefaultCategory,
+    renderCategoryTabs,
+    renderActiveCategoryListHtml,
+    groupHasRunning,
+} from './tabs.js';
+import { bindEvents, finishListRender } from './events.js';
+import { renderRunningServices } from './services.js';
+import { escapeHtml } from './utils.js';
+
+/**
+ * 从 API 加载并渲染项目
+ * @param {boolean} [forceRefresh] - 是否绕过扫描缓存
+ */
+export async function loadProjects(forceRefresh = false) {
+    loadingEl.style.display = 'block';
+    listEl.innerHTML = '';
+    if (tabsEl) tabsEl.hidden = true;
+
+    const url = forceRefresh ? '/api/projects?refresh=1' : '/api/projects';
+    const res = await fetch(url);
+    const data = await res.json();
+
+    applyProjectsPayload(data);
+    loadingEl.style.display = 'none';
+
+    if (scanError) {
+        listEl.innerHTML = `<div class="state-error">
+            <p class="state-error-title">无法扫描项目</p>
+            <p class="state-error-msg">${escapeHtml(scanError)}</p>
+            <p class="state-error-hint">请检查 config.json 的 scanRoot，或设置环境变量 <code>DEV_LAUNCHER_SCAN_ROOT</code></p>
+        </div>`;
+        renderRunningServices();
+        return;
+    }
+
+    if (!allGroups.length) {
+        listEl.innerHTML = `<p class="loading">未在扫描目录中找到含 dev/serve 脚本的项目</p>`;
+        renderRunningServices();
+        return;
+    }
+
+    const cats = [...new Set(allGroups.map((g) => g.category))].sort((a, b) => {
+        if (a === 'App') return -1;
+        if (b === 'App') return 1;
+        return a.localeCompare(b);
+    });
+    categories.length = 0;
+    categories.push(...cats);
+
+    if (!categories.includes(activeCategory)) {
+        setActiveCategory(pickDefaultCategory());
+    } else if (!userExpanded.size && !userCollapsed.size) {
+        const currentHasRunning = allGroups
+            .filter((g) => g.category === activeCategory)
+            .some(groupHasRunning);
+        if (!currentHasRunning) {
+            const preferred = pickDefaultCategory();
+            if (preferred !== activeCategory) setActiveCategory(preferred);
+        }
+    }
+
+    const runningGroupIds = allGroups.filter(groupHasRunning).map((g) => g.id);
+    userExpanded.clear();
+    userCollapsed.clear();
+    for (const id of runningGroupIds) {
+        userExpanded.add(id);
+    }
+    renderCategoryTabs();
+    renderActiveCategoryListHtml();
+    finishListRender();
+}

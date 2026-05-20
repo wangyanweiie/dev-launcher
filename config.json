@@ -1,0 +1,27 @@
+{
+    "scanRoot": "/Users/lemon/Company",
+    "categories": ["App", "Pc"],
+    "port": 3847,
+    "host": "127.0.0.1",
+    "openBrowser": true,
+    "scanCacheSeconds": 30,
+    "ignoreDirNames": [
+        "node_modules",
+        ".git",
+        "dist",
+        "uni_modules",
+        "internal",
+        "nativeplugins",
+        "android",
+        "uniCloud-aliyun",
+        "uniCloud",
+        "cloudfunctions"
+    ],
+    "ignorePathSegments": [
+        "/script/generate-api/",
+        "/test/server/",
+        "/packages/commitlint",
+        "/packages/eslint-config",
+        "/internal/"
+    ]
+}

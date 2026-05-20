@@ -1,0 +1,14 @@
+{
+    "scanRoot": "/Users/you/Company",
+    "categories": ["App", "Pc"],
+    "port": 3847,
+    "host": "127.0.0.1",
+    "openBrowser": true,
+    "scanCacheSeconds": 30,
+    "ignoreDirNames": [
+        "node_modules",
+        ".git",
+        "dist"
+    ],
+    "ignorePathSegments": []
+}
