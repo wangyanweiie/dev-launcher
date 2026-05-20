@@ -117,8 +117,59 @@ const lastKnownState = new Map<
     { status: ProcessStatus; exitCode?: number | null }
 >();
 
+/** 每个任务保留的日志行数上限 */
+const MAX_TASK_LOG_LINES = 500;
+
+/** 任务日志缓冲（刷新页面后可恢复） */
+const taskLogs = new Map<string, string[]>();
+
 /** 日志监听器 */
 let onLog: LogListener = () => {};
+
+/**
+ * 写入任务日志并广播
+ * @param taskId - 任务 ID
+ * @param line - 日志行
+ */
+function recordLog(taskId: string, line: string): void {
+    let buf = taskLogs.get(taskId);
+    if (!buf) {
+        buf = [];
+        taskLogs.set(taskId, buf);
+    }
+    buf.push(line);
+    if (buf.length > MAX_TASK_LOG_LINES) {
+        buf.splice(0, buf.length - MAX_TASK_LOG_LINES);
+    }
+    onLog(taskId, line);
+}
+
+/**
+ * 清空任务日志
+ * @param taskId - 任务 ID
+ */
+export function clearTaskLogs(taskId: string): void {
+    taskLogs.delete(taskId);
+}
+
+/**
+ * 获取单个任务日志副本
+ * @param taskId - 任务 ID
+ */
+export function getTaskLogs(taskId: string): string[] {
+    return [...(taskLogs.get(taskId) ?? [])];
+}
+
+/**
+ * 获取全部任务日志（供刷新后恢复）
+ */
+export function getAllTaskLogs(): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    for (const [id, lines] of taskLogs) {
+        if (lines.length) out[id] = [...lines];
+    }
+    return out;
+}
 /** 状态监听器 */
 let onStatus: StatusListener = () => {};
 /** URL 监听器 */
@@ -181,6 +232,7 @@ export function startTask(
     }
 
     lastKnownState.delete(taskId);
+    clearTaskLogs(taskId);
 
     const resolvedCwd = path.resolve(cwd);
     const { cmd, args } = buildArgs(packageManager, scriptName);
@@ -213,7 +265,7 @@ export function startTask(
         for (const line of text.split(/\r?\n/)) {
             const visible = stripAnsi(line).trim();
             if (!visible) continue;
-            onLog(taskId, visible);
+            recordLog(taskId, visible);
             const url = extractUrl(line);
             if (url && isBetterUrl(meta.url, url)) {
                 meta.url = url;
@@ -235,12 +287,12 @@ export function startTask(
         onStatus(taskId, meta.status, code);
         if (crashed) {
             const hint = signal ? `信号 ${signal}` : `退出码 ${code}`;
-            onLog(taskId, `[dev-launcher] 进程已异常退出 (${hint})`);
+            recordLog(taskId, `[dev-launcher] 进程已异常退出 (${hint})`);
         }
     });
 
     onStatus(taskId, 'running');
-    onLog(taskId, `[dev-launcher] 已启动: ${cmd} ${args.join(' ')} (cwd: ${cwd})`);
+    recordLog(taskId, `[dev-launcher] 已启动: ${cmd} ${args.join(' ')} (cwd: ${cwd})`);
 
     return { meta };
 }
@@ -290,7 +342,7 @@ export function stopTask(taskId: string): boolean {
     processes.delete(taskId);
     lastKnownState.set(taskId, { status: 'stopped' });
     onStatus(taskId, 'stopped');
-    onLog(taskId, '[dev-launcher] 已停止');
+    recordLog(taskId, '[dev-launcher] 已停止');
     return true;
 }
 

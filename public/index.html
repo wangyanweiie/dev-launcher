@@ -32,12 +32,27 @@
         </main>
 
         <aside class="sidebar-panel" id="sidebar-panel">
-            <section class="services-panel">
-                <div class="services-header">
-                    <span>运行中的服务</span>
-                    <span class="services-count" id="services-count">0</span>
+            <section class="services-panel" id="services-panel">
+                <div class="services-section" data-section="managed" id="services-section-managed">
+                    <button type="button" class="services-section-toggle" data-section="managed" aria-expanded="true">
+                        <span class="section-chevron" aria-hidden="true"></span>
+                        <span class="section-title">运行中的服务</span>
+                        <span class="section-count" id="managed-count">0</span>
+                    </button>
+                    <div class="services-section-body">
+                        <div id="managed-list" class="services-list"></div>
+                    </div>
                 </div>
-                <div id="services-list" class="services-list"></div>
+                <div class="services-section" data-section="history" id="services-section-history" hidden>
+                    <button type="button" class="services-section-toggle" data-section="history" aria-expanded="true">
+                        <span class="section-chevron" aria-hidden="true"></span>
+                        <span class="section-title">Company 历史服务</span>
+                        <span class="section-count" id="history-count">0</span>
+                    </button>
+                    <div class="services-section-body">
+                        <div id="history-list" class="services-list"></div>
+                    </div>
+                </div>
             </section>
             <section class="log-panel" id="log-panel">
                 <div class="log-header">

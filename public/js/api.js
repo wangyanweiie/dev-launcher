@@ -20,8 +20,37 @@ import {
     groupHasRunning,
 } from './tabs.js';
 import { bindEvents, finishListRender } from './events.js';
+import { resolveTaskMeta } from './project.js';
+import { importLogs, showLogForTask } from './log.js';
 import { renderRunningServices } from './services.js';
-import { escapeHtml } from './utils.js';
+import { statuses, activeLogTask } from './state.js';
+import { escapeHtml, parseTaskId } from './utils.js';
+
+/**
+ * 从服务端恢复任务日志并聚焦运行中任务
+ */
+export async function loadTaskLogs() {
+    try {
+        const res = await fetch('/api/tasks/logs');
+        const data = await res.json();
+        const logs = data.logs || {};
+        if (!Object.keys(logs).length) return;
+
+        importLogs(logs);
+
+        if (activeLogTask && logs[activeLogTask]) return;
+
+        const runningId = Object.keys(statuses).find((k) => statuses[k] === 'running');
+        const tid = runningId ?? Object.keys(logs)[0];
+        if (!tid) return;
+
+        const { cwd, scriptName } = parseTaskId(tid);
+        const meta = resolveTaskMeta(cwd, scriptName);
+        showLogForTask(tid, `日志 · ${meta.label}`);
+    } catch {
+        /* 忽略 */
+    }
+}
 
 /**
  * 从 API 加载并渲染项目
@@ -84,4 +113,5 @@ export async function loadProjects(forceRefresh = false) {
     renderCategoryTabs();
     renderActiveCategoryListHtml();
     finishListRender();
+    await loadTaskLogs();
 }

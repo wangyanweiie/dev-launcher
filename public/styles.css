@@ -558,37 +558,125 @@ body {
 }
 
 .services-panel {
-    flex-shrink: 0;
+    flex: 0 1 auto;
     max-height: 42vh;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--border);
+    overflow: hidden;
 }
 
-.services-header {
+.services-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.services-section:last-child {
+    border-bottom: none;
+}
+
+.services-section-toggle {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    font-size: 0.85rem;
-    font-weight: 500;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
     background: var(--bg);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
 }
 
-.services-count {
-    font-size: 0.72rem;
-    padding: 1px 8px;
+.services-section-toggle:hover {
+    background: var(--surface-hover);
+}
+
+.section-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.section-chevron::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 5px;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid var(--text-muted);
+    border-bottom: 2px solid var(--text-muted);
+    transform: rotate(45deg);
+    transition: transform 0.15s ease;
+}
+
+.services-section.collapsed .section-chevron::before {
+    transform: rotate(-45deg);
+}
+
+.section-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.section-count {
+    font-size: 0.68rem;
+    padding: 1px 7px;
     border-radius: 999px;
     background: rgba(61, 214, 140, 0.15);
     color: var(--success);
+    flex-shrink: 0;
+}
+
+.services-section-body {
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.services-section.collapsed .services-section-body {
+    display: none;
 }
 
 .services-list {
     overflow-y: auto;
+    max-height: 22vh;
     padding: 6px 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+/* 区块折叠后：服务面板变矮，日志区占据剩余空间 */
+.sidebar-panel.services-partial-collapsed .services-panel {
+    max-height: 28vh;
+}
+
+.sidebar-panel.services-partial-collapsed .services-list {
+    max-height: 16vh;
+}
+
+.sidebar-panel.services-partial-collapsed .log-panel {
+    flex: 1;
+    min-height: 38vh;
+}
+
+.sidebar-panel.services-all-collapsed .services-panel {
+    flex: 0 0 auto;
+    max-height: none;
+}
+
+.sidebar-panel.services-all-collapsed .log-panel {
+    flex: 1;
+    min-height: 55vh;
 }
 
 .services-empty {
@@ -677,14 +765,6 @@ body {
 
 .service-url.crashed {
     color: var(--danger);
-}
-
-.services-section-label {
-    margin: 4px 2px 0;
-    font-size: 0.68rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 }
 
 .service-name {
@@ -780,6 +860,14 @@ body {
 
     .services-panel {
         max-height: 180px;
+    }
+
+    .sidebar-panel.services-all-collapsed .log-panel {
+        min-height: 140px;
+    }
+
+    .services-list {
+        max-height: 120px;
     }
 
     .project-group-header {

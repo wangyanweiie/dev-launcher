@@ -3,7 +3,7 @@
  */
 
 import { updateCardStates } from './tasks.js';
-import { appendLog } from './log.js';
+import { appendLog, importLogs } from './log.js';
 import { statuses, taskUrls, taskExitCodes } from './state.js';
 
 /**
@@ -31,6 +31,9 @@ export function connectWs() {
         if (msg.type === 'url') {
             taskUrls[msg.taskId] = msg.url;
             updateCardStates(msg.taskId);
+        }
+        if (msg.type === 'logs-sync') {
+            importLogs(msg.logs || {});
         }
         if (msg.type === 'log') {
             appendLog(msg.taskId, msg.line);

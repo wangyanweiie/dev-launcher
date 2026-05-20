@@ -19,6 +19,7 @@ import { readDefaults, setProjectDefault } from './defaults.js';
 import { addInstance, readInstances, removeInstance } from './instances.js';
 import {
     getAllStatuses,
+    getAllTaskLogs,
     getManagedPorts,
     getRunningTasks,
     getTaskExitCode,
@@ -264,6 +265,11 @@ app.post('/api/tasks/stop-all', (_req, res) => {
     res.json({ ok: true });
 });
 
+/** 获取已缓冲的任务日志（页面刷新后恢复） */
+app.get('/api/tasks/logs', (_req, res) => {
+    res.json({ logs: getAllTaskLogs() });
+});
+
 /** 结束占用端口的外部进程（孤儿服务） */
 app.post('/api/orphans/kill', async (req, res) => {
     const { port } = req.body as { port?: number };
@@ -300,5 +306,6 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
     clients.add(ws);
+    ws.send(JSON.stringify({ type: 'logs-sync', logs: getAllTaskLogs() }));
     ws.on('close', () => clients.delete(ws));
 });

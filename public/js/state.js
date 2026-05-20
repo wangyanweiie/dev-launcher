@@ -24,6 +24,12 @@ export let scanError = null;
 /** 搜索关键词 */
 export let searchQuery = '';
 
+/** 服务区块折叠：managed=运行中，history=历史 */
+export const servicesSectionCollapsed = {
+    managed: false,
+    history: false,
+};
+
 /** 各任务本地访问地址 */
 /** @type {Record<string, string>} */
 export let taskUrls = {};

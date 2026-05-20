@@ -20,11 +20,26 @@ export const logBody = $('#log-body');
 /** 日志标题 */
 export const logTitle = $('#log-title');
 
-/** 运行中服务列表 */
-export const servicesListEl = $('#services-list');
+/** 侧边栏 */
+export const sidebarPanelEl = $('#sidebar-panel');
 
-/** 运行中服务数量 */
-export const servicesCountEl = $('#services-count');
+/** 服务面板 */
+export const servicesPanelEl = $('#services-panel');
+
+/** 运行中服务列表 */
+export const managedListEl = $('#managed-list');
+
+/** 历史服务列表 */
+export const historyListEl = $('#history-list');
+
+/** 历史服务区块 */
+export const historySectionEl = $('#services-section-history');
+
+/** @deprecated */
+export const servicesListEl = managedListEl;
+
+/** @deprecated */
+export const servicesCountEl = $('#managed-count');
 
 /** 项目搜索框 */
 export const projectSearchEl = $('#project-search');

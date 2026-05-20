@@ -57,3 +57,20 @@ export function clearLogPanel() {
     logLines.length = 0;
     logBody.innerHTML = '';
 }
+
+/**
+ * 从服务端恢复日志缓冲
+ * @param {Record<string, string[]>} logsByTask
+ */
+export function importLogs(logsByTask) {
+    logLines.length = 0;
+    for (const [taskId, lines] of Object.entries(logsByTask)) {
+        for (const line of lines) {
+            logLines.push({ taskId, line });
+        }
+    }
+    while (logLines.length > MAX_LOG) {
+        logLines.shift();
+    }
+    renderLogPanel(activeLogTask);
+}
