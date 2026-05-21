@@ -1,6 +1,10 @@
 # Dev Launcher
 
+[![GitHub](https://img.shields.io/github/license/wangyanweiie/dev-launcher)](https://github.com/wangyanweiie/dev-launcher)
+
 本地开发服务可视化面板：扫描项目目录，识别 `dev` / `serve` 脚本，一键启停，实时日志与运行地址。
+
+**仓库**：<https://github.com/wangyanweiie/dev-launcher>
 
 **仅供本机开发使用**（默认监听 `127.0.0.1`，无鉴权，请勿暴露到局域网或公网）。
 
