@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Dev Launcher">
+  <rect width="32" height="32" rx="7" fill="#1a1d27"/>
+  <rect x="6" y="7" width="20" height="18" rx="3" fill="#0f1117" stroke="#5b8def" stroke-width="1.5"/>
+  <path d="M13 13.5 19 16l-6 2.5V13.5z" fill="#5b8def"/>
+  <rect x="9" y="21" width="14" height="2" rx="1" fill="#2d3348"/>
+  <circle cx="22" cy="10" r="3.5" fill="#3dd68c"/>
+  <circle cx="22" cy="10" r="5" fill="#3dd68c" opacity="0.35"/>
+</svg>
