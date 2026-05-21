@@ -12,6 +12,7 @@ import {
     userExpanded,
     allGroups,
     scanError,
+    scanSkipped,
 } from './state.js';
 import {
     pickDefaultCategory,
@@ -87,13 +88,18 @@ export async function loadProjects(forceRefresh = false) {
         return;
     }
 
-    if (!allGroups.length) {
-        listEl.innerHTML = `<p class="loading">未在扫描目录中找到含 dev/serve 脚本的项目</p>`;
+    if (!allGroups.length && !scanSkipped.length) {
+        listEl.innerHTML = `<p class="list-empty-hint">未在扫描目录中找到含 dev/serve 脚本的项目</p>`;
         renderRunningServices();
         return;
     }
 
-    const cats = [...new Set(allGroups.map((g) => g.category))].sort((a, b) => {
+    const cats = [
+        ...new Set([
+            ...allGroups.map((g) => g.category),
+            ...scanSkipped.map((s) => s.category),
+        ]),
+    ].sort((a, b) => {
         if (a === 'App') return -1;
         if (b === 'App') return 1;
         return a.localeCompare(b);

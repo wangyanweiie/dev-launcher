@@ -23,6 +23,10 @@ export let orphanServices = [];
 /** 扫描错误信息 */
 export let scanError = null;
 
+/** 扫描到但未列入的项目（如无 dev/serve 脚本） */
+/** @type {{ folderName: string; category: string; rootPath: string; reason: string }[]} */
+export let scanSkipped = [];
+
 /** 搜索关键词 */
 export let searchQuery = '';
 
@@ -109,6 +113,7 @@ export function applyProjectsPayload(data) {
     projectDefaults = data.defaults || {};
     projectInstances = data.instances || {};
     allGroups = data.groups || [];
+    scanSkipped = data.skipped || [];
     orphanServices = data.orphans || [];
     scanError = data.scanError || null;
     if (data.running) {

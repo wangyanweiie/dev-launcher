@@ -51,6 +51,20 @@ export interface ProjectGroup {
     hasChildren: boolean;
 }
 
+/** 扫描到但未列入列表的项目（通常缺少可运行脚本） */
+export interface SkippedProject {
+    folderName: string;
+    category: string;
+    rootPath: string;
+    reason: string;
+}
+
+/** 全量扫描结果 */
+export interface ScanResult {
+    groups: ProjectGroup[];
+    skipped: SkippedProject[];
+}
+
 /** config.json 配置结构 */
 export interface LauncherConfig {
     /** 扫描根目录，如 /Users/lemon/Company */
@@ -252,11 +266,50 @@ function scanProjectFolder(
 }
 
 /**
+ * 说明项目文件夹为何未进入列表
+ * @param rootPath - 项目根路径
+ * @param config - 启动器配置
+ */
+function describeSkipReason(rootPath: string, config: LauncherConfig): string {
+    const rootPkg = path.join(rootPath, 'package.json');
+    const hasPkg = fs.existsSync(rootPkg);
+    const hasApps = hasAppsDirectory(rootPath);
+
+    if (!hasPkg && !hasApps) {
+        return '缺少 package.json，且不存在 apps/ 目录';
+    }
+
+    if (hasApps) {
+        const children = findAppsSubProjects(rootPath, config);
+        const rootProject = hasPkg
+            ? parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
+            : null;
+        if (children.length === 0 && !rootProject) {
+            return '存在 apps/，但子项目与根 package.json 均无 dev/serve 脚本';
+        }
+    }
+
+    if (hasPkg) {
+        const pkg = readJsonSafe(rootPkg);
+        const scriptNames = Object.keys((pkg?.scripts as Record<string, string>) ?? {});
+        if (scriptNames.length === 0) {
+            return 'package.json 的 scripts 为空，请添加 dev、dev:h5 或 serve 等脚本';
+        }
+        const names = scriptNames.slice(0, 8).join('、');
+        const more = scriptNames.length > 8 ? '…' : '';
+        return `scripts 中无 dev/serve（当前仅有：${names}${more}）`;
+    }
+
+    return '未找到可运行的 dev/serve 脚本';
+}
+
+/**
  * 扫描配置目录下所有项目
  * @param config - 启动器配置
  */
-export function scanProjects(config: LauncherConfig): ProjectGroup[] {
+export function scanProjects(config: LauncherConfig): ScanResult {
     const groups: ProjectGroup[] = [];
+    const skipped: SkippedProject[] = [];
 
     for (const category of config.categories) {
         const catPath = path.join(config.scanRoot, category);
@@ -267,16 +320,36 @@ export function scanProjects(config: LauncherConfig): ProjectGroup[] {
 
             const projectPath = path.join(catPath, entry.name);
             const group = scanProjectFolder(projectPath, category, config);
-            if (group) groups.push(group);
+            if (group) {
+                groups.push(group);
+                continue;
+            }
+
+            const rootPkg = path.join(projectPath, 'package.json');
+            if (fs.existsSync(rootPkg) || hasAppsDirectory(projectPath)) {
+                skipped.push({
+                    folderName: entry.name,
+                    category,
+                    rootPath: projectPath,
+                    reason: describeSkipReason(projectPath, config),
+                });
+            }
         }
     }
 
-    // 先按分类、再按文件夹名排序
-    return groups.sort((a, b) => {
+    groups.sort((a, b) => {
         const cat = a.category.localeCompare(b.category);
         if (cat !== 0) return cat;
         return a.folderName.localeCompare(b.folderName);
     });
+
+    skipped.sort((a, b) => {
+        const cat = a.category.localeCompare(b.category);
+        if (cat !== 0) return cat;
+        return a.folderName.localeCompare(b.folderName);
+    });
+
+    return { groups, skipped };
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 } from './state.js';
 import { groupMatchesFilter } from './filter.js';
 import { searchQuery } from './state.js';
+import { countSkippedInCategory, renderSkippedPanelHtml } from './skipped.js';
 import { escapeHtml, makeTaskId } from './utils.js';
 
 /** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
@@ -74,15 +75,21 @@ export function renderCategoryTabs() {
     tabsEl.innerHTML = categories
         .map((cat) => {
             const count = allGroups.filter((g) => g.category === cat).length;
+            const skippedN = countSkippedInCategory(cat);
             const running = countRunningInCategory(cat) > 0;
             const active = cat === activeCategory ? ' active' : '';
             const runningMark = running
                 ? '<span class="tab-running-dot" title="有运行中项目"></span>'
                 : '';
+            const skippedMark =
+                skippedN > 0
+                    ? `<span class="tab-skipped-hint" title="${skippedN} 个目录未列入">+${skippedN}</span>`
+                    : '';
             return `<button type="button" class="category-tab${active}" data-tab="${escapeHtml(cat)}"
                 role="tab" aria-selected="${cat === activeCategory}">
                 ${categoryTabLabel(cat)}
                 <span class="tab-count">${count}</span>
+                ${skippedMark}
                 ${runningMark}
             </button>`;
         })
@@ -118,16 +125,21 @@ export function updateCategoryTabIndicators() {
 export function renderActiveCategoryListHtml() {
     const inCategory = allGroups.filter((g) => g.category === activeCategory);
     const filtered = inCategory.filter((g) => groupMatchesFilter(g, searchQuery));
+    const skippedHtml = renderSkippedPanelHtml(activeCategory);
 
     if (!inCategory.length) {
-        listEl.innerHTML = `<p class="loading">「${categoryTabLabel(activeCategory)}」下未找到含 dev/serve 脚本的项目</p>`;
+        listEl.innerHTML =
+            skippedHtml ||
+            `<p class="list-empty-hint">「${categoryTabLabel(activeCategory)}」下未找到含 dev/serve 脚本的项目</p>`;
         return;
     }
 
     if (!filtered.length) {
-        listEl.innerHTML = `<p class="loading">没有匹配「${escapeHtml(searchQuery)}」的项目</p>`;
+        listEl.innerHTML =
+            `<p class="list-empty-hint">没有匹配「${escapeHtml(searchQuery)}」的项目</p>` +
+            skippedHtml;
         return;
     }
 
-    listEl.innerHTML = filtered.map(renderProjectGroup).join('');
+    listEl.innerHTML = filtered.map(renderProjectGroup).join('') + skippedHtml;
 }

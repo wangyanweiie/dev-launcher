@@ -174,6 +174,7 @@ app.get('/api/projects', async (req, res) => {
     const force = req.query.refresh === '1';
 
     let groups: ProjectGroup[] = [];
+    let skipped: import('./scanner.js').SkippedProject[] = [];
     let scanError: string | undefined;
     let cachedAt: number | undefined;
     let fromCache = false;
@@ -181,6 +182,7 @@ app.get('/api/projects', async (req, res) => {
     if (scanCheck.ok) {
         const result = getCachedProjects(config, force);
         groups = result.groups;
+        skipped = result.skipped;
         cachedAt = result.cachedAt;
         fromCache = result.fromCache;
     } else {
@@ -227,6 +229,7 @@ app.get('/api/projects', async (req, res) => {
 
     res.json({
         groups,
+        skipped,
         statuses,
         running,
         urls,
