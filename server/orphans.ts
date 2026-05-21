@@ -1,5 +1,5 @@
 /**
- * 检测本机 localhost 监听端口，并关联 Company 扫描目录下的项目
+ * 检测本机 localhost 监听端口，并关联 scanRoot 扫描目录下的项目
  */
 
 import { exec } from 'node:child_process';
@@ -14,7 +14,7 @@ export interface LocalListener {
     url: string;
 }
 
-/** 孤儿服务（含 Company 项目归属） */
+/** 孤儿服务（含扫描根目录下项目归属） */
 export interface OrphanService extends LocalListener {
     /** 进程工作目录 */
     cwd: string;
@@ -23,8 +23,8 @@ export interface OrphanService extends LocalListener {
     folderName: string;
     subName: string;
     category: string;
-    /** 是否位于 scanRoot（Company）下 */
-    isCompany: boolean;
+    /** 进程 cwd 是否位于 scanRoot 扫描目录下 */
+    isUnderScanRoot: boolean;
 }
 
 /**
@@ -153,15 +153,15 @@ export function resolveProjectFromCwd(
     cwd: string,
     groups: ProjectGroup[],
     scanRoot: string,
-): Pick<OrphanService, 'projectLabel' | 'folderName' | 'subName' | 'category' | 'isCompany'> {
+): Pick<OrphanService, 'projectLabel' | 'folderName' | 'subName' | 'category' | 'isUnderScanRoot'> {
     const resolved = path.resolve(cwd);
     const scanResolved = path.resolve(scanRoot);
-    const isCompany =
+    const underScanRoot =
         resolved === scanResolved || resolved.startsWith(scanResolved + path.sep);
 
-    if (!isCompany) {
+    if (!underScanRoot) {
         return {
-            isCompany: false,
+            isUnderScanRoot: false,
             folderName: path.basename(resolved),
             subName: '',
             category: '',
@@ -209,7 +209,7 @@ export function resolveProjectFromCwd(
             ? `${bestGroup.folderName} · ${bestSub}`
             : bestGroup.folderName;
         return {
-            isCompany: true,
+            isUnderScanRoot: true,
             folderName: bestGroup.folderName,
             subName: bestSub,
             category: bestGroup.category,
@@ -223,7 +223,7 @@ export function resolveProjectFromCwd(
     const category = parts[0] ?? '';
 
     return {
-        isCompany: true,
+        isUnderScanRoot: true,
         folderName,
         subName: parts.length > 2 ? parts.slice(2).join('/') : '',
         category,
@@ -232,7 +232,7 @@ export function resolveProjectFromCwd(
 }
 
 /**
- * 检测孤儿服务：排除 Launcher 管理端口，并标注 Company 项目
+ * 检测孤儿服务：排除 Launcher 管理端口，并标注 scanRoot 下项目
  */
 export async function detectOrphanServices(
     scanRoot: string,
@@ -252,7 +252,7 @@ export async function detectOrphanServices(
         if (!cwd) continue;
 
         const meta = resolveProjectFromCwd(cwd, groups, scanRoot);
-        if (!meta.isCompany) continue;
+        if (!meta.isUnderScanRoot) continue;
 
         companyOrphans.push({ ...l, cwd, ...meta });
     }

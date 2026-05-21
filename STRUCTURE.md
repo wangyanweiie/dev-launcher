@@ -59,6 +59,7 @@ dev-launcher/
         ├── api.js            # REST 拉取项目与日志
         ├── events.js         # 列表区交互与重渲染编排
         ├── services.js       # 右侧服务面板
+        ├── orphan-sync.js    # 历史服务与左侧列表/运行中面板同步
         ├── scan-root.js      # 顶栏扫描目录栏
         ├── sidebar-layout.js # 侧栏服务区/日志区高度
         └── theme.js          # 日间/夜间主题
@@ -102,7 +103,7 @@ index.ts
 | `scanner.ts` | 扫描 `App`/`Pc` 等分类，产出 `groups` 与 `skipped` |
 | `scan-cache.ts` | 包装 `scanProjects`，供 `index` 缓存失效 |
 | `runner.ts` | 管理子进程生命周期与日志；停止时配合 `orphans` |
-| `orphans.ts` | 检测/结束本机监听端口（Company 历史服务） |
+| `orphans.ts` | 检测/结束本机监听端口（历史服务） |
 | `defaults.ts` | 默认子项目与脚本 |
 | `instances.ts` | 副本增删；删除副本时清理对应 default |
 

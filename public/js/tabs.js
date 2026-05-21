@@ -15,6 +15,7 @@ import { groupMatchesFilter } from './filter.js';
 import { searchQuery } from './state.js';
 import { countSkippedInCategory, renderSkippedPanelHtml } from './skipped.js';
 import { escapeHtml, makeTaskId } from './utils.js';
+import { groupHasOrphanRunning } from './orphan-sync.js';
 
 /** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
 
@@ -33,6 +34,7 @@ export function categoryTabLabel(category) {
  * @param {ProjectGroup} group
  */
 export function groupHasRunning(group) {
+    if (groupHasOrphanRunning(group)) return true;
     for (const item of collectSubProjects(group)) {
         for (const s of item.sub.scripts) {
             const st = statuses[makeTaskId(item.sub.cwd, s.name)];

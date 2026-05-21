@@ -4,6 +4,7 @@
 
 import { $ } from './dom.js';
 import { loadProjects } from './api.js';
+import { setLocalHosts } from './urls.js';
 
 /** @type {string} */
 let defaultScanRoot = '';
@@ -52,6 +53,7 @@ export function setScanRootHint(message, isError = false) {
 export function initScanRootBar(cfg) {
     defaultScanRoot = cfg.defaultScanRoot || '';
     scanRootLockedByEnv = !!cfg.scanRootFromEnv;
+    setLocalHosts(cfg.localHosts);
 
     const input = getScanInput();
     if (!input) return;

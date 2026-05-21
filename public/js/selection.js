@@ -5,6 +5,7 @@
 import { renderScriptSelectOptions } from './render.js';
 import { statuses } from './state.js';
 import { normalizeCwd } from './utils.js';
+import { isCwdOrphanRunning } from './orphan-sync.js';
 
 /** @typedef {import('./types.js').SubProjectItem} SubProjectItem */
 /** @typedef {import('./types.js').SelectedTask} SelectedTask */
@@ -37,9 +38,14 @@ export function syncRowToRunningTask(row, subProjects) {
     const scriptSelect = row.querySelector('.script-select');
     if (!scriptSelect) return null;
 
+    if (row.classList.contains('instance-row--copy')) {
+        return getSelectedOption(row);
+    }
+
     for (const opt of scriptSelect.options) {
         const st = statuses[opt.dataset.taskId];
-        if (st !== 'running' && st !== 'crashed') continue;
+        const orphanRun = opt.dataset.cwd && isCwdOrphanRunning(opt.dataset.cwd);
+        if (st !== 'running' && st !== 'crashed' && !orphanRun) continue;
 
         const subSelect = row.querySelector('.subproject-select');
         if (subSelect && subProjects?.length) {
@@ -78,9 +84,25 @@ export function getRowActiveTask(row) {
     const scriptSelect = row.querySelector('.script-select');
     if (!scriptSelect) return null;
 
+    const isCopy = row.classList.contains('instance-row--copy');
+
+    if (isCopy) {
+        const sel = getSelectedOption(row);
+        if (!sel) return null;
+        const st = statuses[sel.taskId];
+        if (st === 'running' || st === 'crashed') return sel;
+        if (sel.cwd && isCwdOrphanRunning(sel.cwd)) return sel;
+        return sel;
+    }
+
     for (const opt of scriptSelect.options) {
         const st = statuses[opt.dataset.taskId];
         if (st === 'running' || st === 'crashed') {
+            return taskFromOption(opt, row);
+        }
+    }
+    for (const opt of scriptSelect.options) {
+        if (opt.dataset.cwd && isCwdOrphanRunning(opt.dataset.cwd)) {
             return taskFromOption(opt, row);
         }
     }

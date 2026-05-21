@@ -189,6 +189,15 @@ export function bindEvents() {
             const sel = getRowActiveTask(row);
             if (!sel) return;
 
+            const { isCwdOrphanRunning, killOrphansForCwd } = await import('./orphan-sync.js');
+            const launcherRunning = statuses[sel.taskId] === 'running';
+            if (!launcherRunning && isCwdOrphanRunning(sel.cwd)) {
+                await killOrphansForCwd(sel.cwd);
+                const { loadProjects } = await import('./api.js');
+                await loadProjects(true);
+                return;
+            }
+
             const res = await fetch('/api/tasks/stop', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -230,8 +239,6 @@ export function bindEvents() {
         btn.addEventListener('click', async () => {
             const groupEl = btn.closest('.project-group');
             const groupId = groupEl?.dataset.groupId;
-            const mainRow = groupEl?.querySelector('.instance-row:not(.instance-row--copy)');
-            const sel = getSelectedOption(mainRow);
             if (!groupId) return;
 
             const res = await fetch('/api/instances', {
@@ -247,19 +254,12 @@ export function bindEvents() {
                 Object.assign(projectInstances, data.instances);
             }
 
-            if (sel && data.instance?.instanceId) {
-                await fetch('/api/defaults', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        groupId,
-                        instanceId: data.instance.instanceId,
-                        subKey: sel.cwd,
-                        script: sel.script,
-                    }),
-                });
+            if (data.instance?.instanceId) {
+                const key = makeDefaultKey(groupId, data.instance.instanceId);
+                delete projectDefaults[key];
             }
 
+            userExpanded.add(groupId);
             refreshActiveCategoryView();
         });
     });

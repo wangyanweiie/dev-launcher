@@ -26,6 +26,7 @@ import { importLogs, showLogForTask } from './log.js';
 import { renderRunningServices } from './services.js';
 import { statuses, activeLogTask } from './state.js';
 import { escapeHtml, parseTaskId } from './utils.js';
+import { syncOrphansWithProjectList } from './orphan-sync.js';
 
 /**
  * 从服务端恢复任务日志并聚焦运行中任务
@@ -76,6 +77,7 @@ export async function loadProjects(forceRefresh = false) {
     const data = await res.json();
 
     applyProjectsPayload(data);
+    syncOrphansWithProjectList();
     if (loadingEl) loadingEl.style.display = 'none';
 
     if (scanError) {
@@ -119,12 +121,8 @@ export async function loadProjects(forceRefresh = false) {
         }
     }
 
-    const runningGroupIds = allGroups.filter(groupHasRunning).map((g) => g.id);
     userExpanded.clear();
     userCollapsed.clear();
-    for (const id of runningGroupIds) {
-        userExpanded.add(id);
-    }
     renderCategoryTabs();
     renderActiveCategoryListHtml();
     finishListRender();

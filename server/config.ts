@@ -2,7 +2,9 @@
  * 配置加载：config.json + 环境变量覆盖
  */
 
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { LauncherConfig } from './scanner.js';
 import { readSettings } from './settings.js';
@@ -15,6 +17,8 @@ export interface ResolvedConfig extends LauncherConfig {
     openBrowser: boolean;
     /** 扫描结果缓存 TTL（毫秒） */
     scanCacheMs: number;
+    /** 可选：指定无线网 IPv4，不填则自动检测 Wi-Fi 网卡 */
+    wifiIp?: string;
 }
 
 /**
@@ -35,6 +39,7 @@ export function loadConfig(root: string): ResolvedConfig {
         host?: string;
         openBrowser?: boolean;
         scanCacheSeconds?: number;
+        wifiIp?: string;
     };
 
     const settings = readSettings();
@@ -56,6 +61,7 @@ export function loadConfig(root: string): ResolvedConfig {
         host: raw.host ?? '127.0.0.1',
         openBrowser: raw.openBrowser !== false,
         scanCacheMs: (raw.scanCacheSeconds ?? 30) * 1000,
+        wifiIp: raw.wifiIp?.trim() || undefined,
     };
 }
 
@@ -104,6 +110,84 @@ export function validateScanRoot(scanRoot: string): { ok: true } | { ok: false; 
     }
     return { ok: true };
 }
+
+/**
+ * macOS：通过 networksetup 解析 Wi-Fi 对应网卡名（多为 en0）
+ */
+function getDarwinWifiInterface(): string | null {
+    if (process.platform !== 'darwin') return null;
+    try {
+        const out = execSync('networksetup -listallhardwareports', {
+            encoding: 'utf8',
+            timeout: 3000,
+        });
+        const lines = out.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            if (!/Hardware Port:\s*Wi-Fi/i.test(lines[i])) continue;
+            for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+                const m = lines[j].match(/Device:\s*(\S+)/);
+                if (m) return m[1];
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+    return null;
+}
+
+/**
+ * 从指定网卡名读取非 internal 的 IPv4
+ */
+function pickIPv4FromInterface(
+    ifaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>,
+    name: string,
+): string[] {
+    const entries = ifaces[name];
+    if (!entries?.length) return [];
+    const addrs: string[] = [];
+    for (const iface of entries) {
+        const family = iface.family as string | number;
+        if (family !== 'IPv4' && family !== 4) continue;
+        if (iface.internal || !iface.address) continue;
+        addrs.push(iface.address);
+    }
+    return addrs;
+}
+
+/**
+ * 用于访问地址展示：仅无线网 IPv4（localhost 由前端单独渲染）
+ * 优先级：DEV_LAUNCHER_WIFI_IP > config.wifiIp > 自动检测 Wi-Fi 网卡
+ */
+export function getWifiIPv4Addresses(explicitIp?: string): string[] {
+    const fromEnv = process.env.DEV_LAUNCHER_WIFI_IP?.trim();
+    if (fromEnv) return [fromEnv];
+    if (explicitIp?.trim()) return [explicitIp.trim()];
+
+    const ifaces = os.networkInterfaces();
+    if (!ifaces) return [];
+
+    if (process.platform === 'darwin') {
+        const wifiDev = getDarwinWifiInterface();
+        if (wifiDev) {
+            const ips = pickIPv4FromInterface(ifaces, wifiDev);
+            if (ips.length) return [...new Set(ips)];
+        }
+        const en0 = pickIPv4FromInterface(ifaces, 'en0');
+        if (en0.length) return [...new Set(en0)];
+    }
+
+    for (const name of Object.keys(ifaces)) {
+        if (/^wlan\d+|^wlp\d+s\d+$/i.test(name)) {
+            const ips = pickIPv4FromInterface(ifaces, name);
+            if (ips.length) return [...new Set(ips)];
+        }
+    }
+
+    return [];
+}
+
+/** @deprecated 使用 getWifiIPv4Addresses */
+export const getLocalIPv4Addresses = getWifiIPv4Addresses;
 
 /**
  * 判断任务工作目录是否在扫描根目录之下（含根目录本身）

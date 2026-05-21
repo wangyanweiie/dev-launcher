@@ -15,6 +15,7 @@ import {
 import {
     applyScanRoot,
     getDefaultScanRoot,
+    getWifiIPv4Addresses,
     loadConfig,
     openBrowser,
     resolveEffectiveScanRoot,
@@ -124,6 +125,7 @@ app.get('/api/config', (_req, res) => {
         scanOk: scanCheck.ok,
         scanError: scanCheck.ok ? undefined : scanCheck.error,
         scanRootFromEnv: !!process.env.DEV_LAUNCHER_SCAN_ROOT?.trim(),
+        localHosts: getWifiIPv4Addresses(config.wifiIp),
     });
 });
 

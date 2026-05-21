@@ -9,6 +9,6 @@
 /** @typedef {{ cwd: string; script: string; pm: string; taskId: string; label: string }} SelectedTask */
 /** @typedef {{ instanceId: string; createdAt: number }} ProjectInstance */
 /** @typedef {{ group: ProjectGroup; instanceId: string; isCopy: boolean; copyLabel: string | null }} CardDescriptor */
-/** @typedef {{ port: number; pid: number; command: string; url: string; cwd?: string; projectLabel: string; folderName: string; subName: string; category: string; isCompany: boolean }} OrphanService */
+/** @typedef {{ port: number; pid: number; command: string; url: string; cwd?: string; projectLabel: string; folderName: string; subName: string; category: string; isUnderScanRoot: boolean }} OrphanService */
 
 export {};

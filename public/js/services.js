@@ -10,11 +10,24 @@ import {
     historySectionEl,
 } from './dom.js';
 import { resolveTaskMeta } from './project.js';
-import { statuses, taskUrls, taskExitCodes, orphanServices, servicesSectionCollapsed } from './state.js';
+import {
+    statuses,
+    taskUrls,
+    taskExitCodes,
+    historyOrphans,
+    orphanRunningByCwd,
+    servicesSectionCollapsed,
+} from './state.js';
 import { escapeHtml, parseTaskId } from './utils.js';
 import { appendLog, showLogForTask } from './log.js';
 import { scheduleSidebarLogLayout } from './sidebar-layout.js';
 import { normalizeTaskUrls, renderUrlLinksHtml } from './urls.js';
+import {
+    findSubprojectByCwd,
+    defaultTaskIdForCwd,
+    isLauncherRunningOnCwd,
+} from './orphan-sync.js';
+import { normalizeCwd } from './utils.js';
 
 /** @typedef {import('./types.js').OrphanService} OrphanService */
 
@@ -87,7 +100,7 @@ export function toggleServicesSection(section) {
  * 收集 Launcher 管理的任务
  */
 export function collectManagedServices() {
-    /** @type {Array<{ taskId: string; cwd: string; scriptName: string; url?: string; label: string; category: string; status: string }>} */
+    /** @type {Array<{ taskId: string; cwd: string; scriptName: string; urls: string[]; label: string; category: string; status: string; orphanPorts?: number[] }>} */
     const items = [];
 
     for (const [tid, status] of Object.entries(statuses)) {
@@ -102,6 +115,33 @@ export function collectManagedServices() {
             label: meta.label,
             category: meta.category,
             status,
+        });
+    }
+
+    for (const [cwdKey, info] of Object.entries(orphanRunningByCwd)) {
+        if (isLauncherRunningOnCwd(cwdKey)) continue;
+        const match = findSubprojectByCwd(cwdKey);
+        if (!match) continue;
+
+        const { cwd, scriptName } = (() => {
+            const tid = defaultTaskIdForCwd(cwdKey, match.group);
+            const idx = tid.lastIndexOf('::');
+            return {
+                cwd: tid.slice(0, idx),
+                scriptName: tid.slice(idx + 2),
+            };
+        })();
+
+        const meta = resolveTaskMeta(cwd, scriptName);
+        items.push({
+            taskId: `orphan::${normalizeCwd(cwd)}`,
+            cwd,
+            scriptName,
+            urls: normalizeTaskUrls(info.urls),
+            label: meta.label,
+            category: match.group.category,
+            status: 'external',
+            orphanPorts: info.ports,
         });
     }
 
@@ -128,7 +168,7 @@ function renderOrphanItem(o) {
         dotClass: 'external',
         name: title,
         badge,
-        urlHtml: `<a class="service-url" href="${escapeHtml(o.url)}" target="_blank" rel="noopener">${escapeHtml(o.url)}</a>`,
+        urlHtml: `<div class="service-url-list">${renderUrlLinksHtml([o.url])}</div>`,
         actionsHtml: actions,
         dataAttrs: `data-port="${o.port}"`,
     });
@@ -141,7 +181,7 @@ export function renderRunningServices() {
     if (!managedListEl) return;
 
     const managed = collectManagedServices();
-    const historyCount = orphanServices.length;
+    const historyCount = historyOrphans.length;
 
     const managedCountEl = document.querySelector('#managed-count');
     const historyCountEl = document.querySelector('#history-count');
@@ -158,6 +198,7 @@ export function renderRunningServices() {
         managedListEl.innerHTML = managed
             .map((item) => {
                 const isCrashed = item.status === 'crashed';
+                const isExternal = item.status === 'external';
                 const code = taskExitCodes[item.taskId];
                 let urlBlock;
                 if (item.urls?.length) {
@@ -169,11 +210,17 @@ export function renderRunningServices() {
                 }
 
                 const actions = [
-                    `<button type="button" class="btn btn-ghost btn-service-log" data-action="service-log"
+                    isExternal
+                        ? ''
+                        : `<button type="button" class="btn btn-ghost btn-service-log" data-action="service-log"
                         data-task-id="${escapeHtml(item.taskId)}">日志</button>`,
                     isCrashed
                         ? ''
-                        : `<button type="button" class="btn btn-stop btn-service-stop" data-action="service-stop"
+                        : isExternal
+                          ? `<button type="button" class="btn btn-stop btn-service-stop" data-action="orphan-kill-cwd"
+                            data-cwd="${escapeHtml(item.cwd)}"
+                            data-label="${escapeHtml(item.label)}">关闭</button>`
+                          : `<button type="button" class="btn btn-stop btn-service-stop" data-action="service-stop"
                             data-cwd="${escapeHtml(item.cwd)}"
                             data-script="${escapeHtml(item.scriptName)}"
                             data-label="${escapeHtml(item.label)}">关闭</button>`,
@@ -182,8 +229,8 @@ export function renderRunningServices() {
                     .join('');
 
                 return renderServiceCard({
-                    extraClass: isCrashed ? 'crashed' : '',
-                    dotClass: isCrashed ? 'crashed' : 'running',
+                    extraClass: isCrashed ? 'crashed' : isExternal ? 'external' : '',
+                    dotClass: isCrashed ? 'crashed' : isExternal ? 'external' : 'running',
                     name: item.label,
                     urlHtml: urlBlock,
                     actionsHtml: actions,
@@ -197,7 +244,7 @@ export function renderRunningServices() {
         if (!historyCount) {
             historyListEl.innerHTML = '';
         } else {
-            historyListEl.innerHTML = orphanServices.map(renderOrphanItem).join('');
+            historyListEl.innerHTML = historyOrphans.map(renderOrphanItem).join('');
         }
     }
 
@@ -277,6 +324,19 @@ export function bindServicesPanel() {
             e.preventDefault();
             const port = Number(killBtn.getAttribute('data-port'));
             if (port) await killOrphan(port);
+            return;
+        }
+
+        const killCwdBtn = e.target.closest('[data-action="orphan-kill-cwd"]');
+        if (killCwdBtn) {
+            e.preventDefault();
+            const cwd = killCwdBtn.getAttribute('data-cwd');
+            if (cwd) {
+                const { killOrphansForCwd } = await import('./orphan-sync.js');
+                await killOrphansForCwd(cwd);
+                const { loadProjects } = await import('./api.js');
+                await loadProjects(true);
+            }
             return;
         }
 

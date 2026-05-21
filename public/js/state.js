@@ -16,9 +16,19 @@ export let statuses = {};
 /** @type {Record<string, number>} */
 export let taskExitCodes = {};
 
-/** Company 目录下的历史/外部监听服务 */
+/** 扫描根目录下的历史/外部监听服务（API 原始列表） */
 /** @type {import('./types.js').OrphanService[]} */
 export let orphanServices = [];
+
+/** 无法匹配左侧列表、仅展示在历史区块的服务 */
+/** @type {import('./types.js').OrphanService[]} */
+export let historyOrphans = [];
+
+/**
+ * 已匹配左侧子项目的 cwd → 端口与 URL（Launcher 未托管的运行中进程）
+ * @type {Record<string, { urls: string[]; ports: number[] }>}
+ */
+export let orphanRunningByCwd = {};
 
 /** 扫描错误信息 */
 export let scanError = null;
