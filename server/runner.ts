@@ -56,16 +56,14 @@ type UrlListener = (taskId: string, urls: string[]) => void;
 const URL_RE =
     /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:\/[^\s)\]'">]*)?/gi;
 
-/** Vite 插件在终端打印的调试入口，非业务访问地址 */
-const VITE_DEBUG_PATH_SEGMENTS = ['/__devtools__', '/__inspect__'];
-
 /**
  * 是否为应在面板展示的应用访问地址（排除 Vite 插件调试路径）
+ * Vite 可能打印 /__inspect/ 或 /__inspect__/，devtools 同理
  */
 function isAppDevUrl(url: string): boolean {
     try {
         const pathname = new URL(url).pathname;
-        return !VITE_DEBUG_PATH_SEGMENTS.some((seg) => pathname.includes(seg));
+        return !pathname.includes('/__devtools') && !pathname.includes('/__inspect');
     } catch {
         return true;
     }

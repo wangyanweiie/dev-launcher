@@ -11,16 +11,14 @@ let localHosts = [];
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 
-/** Vite 插件调试入口（vite-plugin-vue-devtools、vite-plugin-inspect） */
-const VITE_DEBUG_PATH_SEGMENTS = ['/__devtools__', '/__inspect__'];
-
 /**
  * @param {string} url
+ * Vite 可能打印 /__inspect/ 或 /__inspect__/，devtools 同理
  */
 function isAppDevUrl(url) {
     try {
         const pathname = new URL(url).pathname;
-        return !VITE_DEBUG_PATH_SEGMENTS.some((seg) => pathname.includes(seg));
+        return !pathname.includes('/__devtools') && !pathname.includes('/__inspect');
     } catch {
         return true;
     }
