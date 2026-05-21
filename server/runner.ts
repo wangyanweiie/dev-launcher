@@ -28,8 +28,8 @@ export interface RunningTask {
     startedAt: number;
     /** 当前状态 */
     status: ProcessStatus;
-    /** 从日志解析出的本地访问地址 */
-    url?: string;
+    /** 从日志解析出的本地访问地址（可多端口，如 8888 + 5173） */
+    urls?: string[];
     /** 退出码（崩溃时） */
     exitCode?: number | null;
 }
@@ -50,7 +50,7 @@ type StatusListener = (
     exitCode?: number | null,
 ) => void;
 /** 访问地址解析回调 */
-type UrlListener = (taskId: string, url: string) => void;
+type UrlListener = (taskId: string, urls: string[]) => void;
 
 /** 匹配本地开发服务器 URL 的正则 */
 const URL_RE =
@@ -80,33 +80,67 @@ function normalizeUrl(raw: string): string | null {
 }
 
 /**
- * 从日志行中提取最合适的本地访问 URL（优先带端口）
+ * 从日志行中提取所有本地访问 URL（去重）
  * @param line - 单行日志
  */
-export function extractUrl(line: string): string | null {
+export function extractUrls(line: string): string[] {
     const clean = stripAnsi(line);
     const matches = clean.match(URL_RE);
-    if (!matches?.length) return null;
+    if (!matches?.length) return [];
 
-    const normalized = matches
-        .map(normalizeUrl)
-        .filter((u): u is string => !!u);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of matches) {
+        const u = normalizeUrl(raw);
+        if (u && !seen.has(u)) {
+            seen.add(u);
+            out.push(u);
+        }
+    }
+    return out;
+}
 
-    if (!normalized.length) return null;
-
-    const withPort = normalized.filter((u) => /:\d+/.test(u));
-    return withPort.length ? withPort[withPort.length - 1] : normalized[normalized.length - 1];
+/** @deprecated 使用 extractUrls */
+export function extractUrl(line: string): string | null {
+    const all = extractUrls(line);
+    return all.length ? all[all.length - 1] : null;
 }
 
 /**
- * 新 URL 是否优于已记录的（用于后续日志覆盖无端口地址）
+ * Vite 517x 优先，其余按端口升序
  */
-function isBetterUrl(current: string | undefined, next: string): boolean {
-    if (!current) return true;
-    const curHasPort = /:\d+/.test(current);
-    const nextHasPort = /:\d+/.test(next);
-    if (!curHasPort && nextHasPort) return true;
-    return false;
+function sortTaskUrls(urls: string[]): string[] {
+    return [...urls].sort((a, b) => {
+        const pa = portFromUrl(a) ?? 0;
+        const pb = portFromUrl(b) ?? 0;
+        const aVite = pa >= 5173 && pa <= 5199;
+        const bVite = pb >= 5173 && pb <= 5199;
+        if (aVite && !bVite) return -1;
+        if (!aVite && bVite) return 1;
+        return pa - pb;
+    });
+}
+
+/**
+ * 合并新 URL 到任务列表
+ */
+function mergeTaskUrls(existing: string[] | undefined, incoming: string[]): string[] {
+    const set = new Set(existing ?? []);
+    for (const u of incoming) set.add(u);
+    return sortTaskUrls([...set]);
+}
+
+/**
+ * 追加 URL 并通知前端
+ */
+function appendTaskUrls(meta: RunningTask, taskId: string, incoming: string[]): void {
+    if (!incoming.length) return;
+    const merged = mergeTaskUrls(meta.urls, incoming);
+    if (merged.length === (meta.urls?.length ?? 0) && merged.every((u, i) => u === meta.urls?.[i])) {
+        return;
+    }
+    meta.urls = merged;
+    onUrl(taskId, merged);
 }
 
 /** 运行中的子进程映射：taskId -> { proc, meta } */
@@ -267,11 +301,8 @@ export function startTask(
             const visible = stripAnsi(line).trim();
             if (!visible) continue;
             recordLog(taskId, visible);
-            const url = extractUrl(line);
-            if (url && isBetterUrl(meta.url, url)) {
-                meta.url = url;
-                onUrl(taskId, url);
-            }
+            const found = extractUrls(line);
+            if (found.length) appendTaskUrls(meta, taskId, found);
         }
     };
 
@@ -284,7 +315,7 @@ export function startTask(
         const crashed = !intentionalStop && code !== 0 && code !== null;
         meta.status = crashed ? 'crashed' : 'stopped';
         meta.exitCode = crashed ? code : null;
-        meta.url = undefined;
+        meta.urls = undefined;
         lastKnownState.set(taskId, {
             status: meta.status,
             exitCode: crashed ? code : undefined,
@@ -349,9 +380,13 @@ export async function stopTask(taskId: string): Promise<boolean> {
 
     const { proc, meta } = entry;
     const pid = proc.pid;
-    const port = meta.url ? portFromUrl(meta.url) : null;
+    const ports = new Set<number>();
+    for (const u of meta.urls ?? []) {
+        const p = portFromUrl(u);
+        if (p) ports.add(p);
+    }
 
-    meta.url = undefined;
+    meta.urls = undefined;
     meta.status = 'stopped';
     processes.delete(taskId);
 
@@ -362,7 +397,7 @@ export async function stopTask(taskId: string): Promise<boolean> {
     }
 
     if (pid) await killProcessTree(pid);
-    if (port) {
+    for (const port of ports) {
         const killed = await killByPort(port);
         if (killed) {
             recordLog(taskId, `[dev-launcher] 已释放端口 ${port}`);
@@ -417,13 +452,9 @@ export function getAllStatuses(taskIds: string[]): Record<string, ProcessStatus>
 export function getManagedPorts(): Set<number> {
     const ports = new Set<number>();
     for (const { meta } of processes.values()) {
-        if (meta.url) {
-            try {
-                const p = new URL(meta.url).port;
-                if (p) ports.add(Number(p));
-            } catch {
-                /* ignore */
-            }
+        for (const u of meta.urls ?? []) {
+            const p = portFromUrl(u);
+            if (p) ports.add(p);
         }
     }
     return ports;

@@ -68,7 +68,7 @@ setRunnerListeners({
     onLog: (taskId, line) => broadcast({ type: 'log', taskId, line }),
     onStatus: (taskId, status, exitCode) =>
         broadcast({ type: 'status', taskId, status, exitCode: exitCode ?? undefined }),
-    onUrl: (taskId, url) => broadcast({ type: 'url', taskId, url }),
+    onUrl: (taskId, urls) => broadcast({ type: 'urls', taskId, urls }),
 });
 
 /**
@@ -204,16 +204,16 @@ app.get('/api/projects', async (req, res) => {
         }
     }
 
-    const urls: Record<string, string> = Object.fromEntries(
-        running.filter((t) => t.url).map((t) => [t.taskId, t.url!]),
+    const urls: Record<string, string[]> = Object.fromEntries(
+        running.filter((t) => t.urls?.length).map((t) => [t.taskId, t.urls!]),
     );
     const defaults = readDefaults();
     const instances = readInstances();
 
     const managedPorts = getManagedPorts();
     for (const t of running) {
-        if (t.url) {
-            const p = portFromUrl(t.url);
+        for (const u of t.urls ?? []) {
+            const p = portFromUrl(u);
             if (p) managedPorts.add(p);
         }
     }

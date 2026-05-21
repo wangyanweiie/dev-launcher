@@ -2,6 +2,8 @@
  * 全局共享状态
  */
 
+import { normalizeTaskUrls } from './urls.js';
+
 /** @typedef {import('./types.js').DevScript} DevScript */
 /** @typedef {import('./types.js').SubProject} SubProject */
 /** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
@@ -30,8 +32,8 @@ export const servicesSectionCollapsed = {
     history: false,
 };
 
-/** 各任务本地访问地址 */
-/** @type {Record<string, string>} */
+/** 各任务本地访问地址（可多端口） */
+/** @type {Record<string, string[]>} */
 export let taskUrls = {};
 
 /** 默认配置 */
@@ -100,7 +102,10 @@ export function setSearchQuery(q) {
 export function applyProjectsPayload(data) {
     statuses = data.statuses || {};
     taskExitCodes = data.exitCodes || {};
-    taskUrls = data.urls || {};
+    taskUrls = {};
+    for (const [id, val] of Object.entries(data.urls || {})) {
+        taskUrls[id] = normalizeTaskUrls(val);
+    }
     projectDefaults = data.defaults || {};
     projectInstances = data.instances || {};
     allGroups = data.groups || [];
@@ -109,7 +114,8 @@ export function applyProjectsPayload(data) {
     if (data.running) {
         for (const t of data.running) {
             statuses[t.taskId] = 'running';
-            if (t.url) taskUrls[t.taskId] = t.url;
+            if (t.urls?.length) taskUrls[t.taskId] = normalizeTaskUrls(t.urls);
+            else if (t.url) taskUrls[t.taskId] = normalizeTaskUrls(t.url);
         }
     }
 }

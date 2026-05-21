@@ -7,6 +7,7 @@ import { applyAutoCollapseForTask, syncGroupCollapseState } from './collapse.js'
 import { getRowActiveTask, rowHasTask } from './selection.js';
 import { renderRunningServices } from './services.js';
 import { statuses, taskUrls, taskExitCodes } from './state.js';
+import { normalizeTaskUrls, renderUrlLinksHtml } from './urls.js';
 
 /**
  * 更新实例行按钮、状态点、运行地址
@@ -25,7 +26,7 @@ export function updateCardStates(changedTaskId) {
         const dot = row.querySelector('.status-dot');
         const startBtn = row.querySelector('[data-action="start"]');
         const stopBtn = row.querySelector('[data-action="stop"]');
-        const urlEl = row.querySelector('.run-url');
+        const urlsEl = row.querySelector('.run-urls');
         const logBtn = row.querySelector('[data-action="view-log"]');
 
         if (dot) {
@@ -36,29 +37,22 @@ export function updateCardStates(changedTaskId) {
         if (stopBtn) stopBtn.disabled = !running;
         if (logBtn) logBtn.setAttribute('data-task-id', sel.taskId);
 
-        if (urlEl) {
-            const url = taskUrls[sel.taskId];
-            if (running && url) {
-                urlEl.href = url;
-                urlEl.textContent = url;
-                urlEl.target = '_blank';
-                urlEl.rel = 'noopener';
-                urlEl.classList.add('visible');
-                urlEl.classList.remove('crashed-hint');
+        if (urlsEl) {
+            const urls = normalizeTaskUrls(taskUrls[sel.taskId]);
+            if (running && urls.length) {
+                urlsEl.innerHTML = renderUrlLinksHtml(urls, 'run-url-link');
+                urlsEl.classList.add('visible');
+                urlsEl.classList.remove('crashed-hint');
             } else if (crashed) {
                 const code = taskExitCodes[sel.taskId];
-                urlEl.classList.add('visible', 'crashed-hint');
-                urlEl.removeAttribute('href');
-                urlEl.removeAttribute('target');
-                urlEl.removeAttribute('rel');
-                urlEl.textContent =
+                urlsEl.innerHTML = '';
+                urlsEl.classList.add('visible', 'crashed-hint');
+                urlsEl.textContent =
                     code !== undefined ? `已崩溃 (退出码 ${code})` : '已崩溃';
             } else {
-                urlEl.classList.remove('visible', 'crashed-hint');
-                urlEl.removeAttribute('href');
-                urlEl.removeAttribute('target');
-                urlEl.removeAttribute('rel');
-                urlEl.textContent = '';
+                urlsEl.innerHTML = '';
+                urlsEl.classList.remove('visible', 'crashed-hint');
+                urlsEl.textContent = '';
             }
         }
     });

@@ -5,6 +5,7 @@
 import { updateCardStates } from './tasks.js';
 import { appendLog, importLogs } from './log.js';
 import { statuses, taskUrls, taskExitCodes } from './state.js';
+import { normalizeTaskUrls } from './urls.js';
 
 /**
  * 建立连接并监听日志/状态/URL
@@ -30,8 +31,11 @@ export function connectWs() {
             }
             updateCardStates(msg.taskId);
         }
-        if (msg.type === 'url') {
-            taskUrls[msg.taskId] = msg.url;
+        if (msg.type === 'urls') {
+            taskUrls[msg.taskId] = normalizeTaskUrls(msg.urls);
+            updateCardStates(msg.taskId);
+        } else if (msg.type === 'url') {
+            taskUrls[msg.taskId] = normalizeTaskUrls(msg.url);
             updateCardStates(msg.taskId);
         }
         if (msg.type === 'logs-sync') {

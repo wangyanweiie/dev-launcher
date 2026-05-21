@@ -14,6 +14,7 @@ import { statuses, taskUrls, taskExitCodes, orphanServices, servicesSectionColla
 import { escapeHtml, parseTaskId } from './utils.js';
 import { appendLog, showLogForTask } from './log.js';
 import { scheduleSidebarLogLayout } from './sidebar-layout.js';
+import { normalizeTaskUrls, renderUrlLinksHtml } from './urls.js';
 
 /** @typedef {import('./types.js').OrphanService} OrphanService */
 
@@ -97,7 +98,7 @@ export function collectManagedServices() {
             taskId: tid,
             cwd,
             scriptName,
-            url: taskUrls[tid],
+            urls: normalizeTaskUrls(taskUrls[tid]),
             label: meta.label,
             category: meta.category,
             status,
@@ -159,8 +160,8 @@ export function renderRunningServices() {
                 const isCrashed = item.status === 'crashed';
                 const code = taskExitCodes[item.taskId];
                 let urlBlock;
-                if (item.url) {
-                    urlBlock = `<a class="service-url" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>`;
+                if (item.urls?.length) {
+                    urlBlock = `<div class="service-url-list">${renderUrlLinksHtml(item.urls)}</div>`;
                 } else if (isCrashed) {
                     urlBlock = `<span class="service-url crashed">${code !== undefined ? `已崩溃 (${code})` : '已崩溃'}</span>`;
                 } else {

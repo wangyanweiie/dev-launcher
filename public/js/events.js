@@ -170,9 +170,14 @@ export function bindEvents() {
             if (data.alreadyRunning) {
                 appendLog(sel.taskId, '[dev-launcher] 任务已在运行，未重复启动');
             }
-            if (data.task?.url) {
+            if (data.task?.urls?.length) {
                 const { taskUrls } = await import('./state.js');
-                taskUrls[sel.taskId] = data.task.url;
+                const { normalizeTaskUrls } = await import('./urls.js');
+                taskUrls[sel.taskId] = normalizeTaskUrls(data.task.urls);
+            } else if (data.task?.url) {
+                const { taskUrls } = await import('./state.js');
+                const { normalizeTaskUrls } = await import('./urls.js');
+                taskUrls[sel.taskId] = normalizeTaskUrls(data.task.url);
             }
             updateCardStates(sel.taskId);
         });

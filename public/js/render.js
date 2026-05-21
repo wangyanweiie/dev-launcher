@@ -10,6 +10,7 @@ import {
     resolveDefaultSelection,
 } from './project.js';
 import { projectInstances, statuses, taskUrls } from './state.js';
+import { normalizeTaskUrls } from './urls.js';
 import { escapeHtml, makeTaskId } from './utils.js';
 
 /** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
@@ -42,10 +43,10 @@ export function renderScriptSelectOptions(sub, subLabel, selectedScript) {
  * @param {SelectedTask | null} sel
  */
 export function initialState(sel) {
-    if (!sel) return { running: false, url: '' };
+    if (!sel) return { running: false, urls: [] };
     return {
         running: statuses[sel.taskId] === 'running',
-        url: taskUrls[sel.taskId] ?? '',
+        urls: normalizeTaskUrls(taskUrls[sel.taskId]),
     };
 }
 
@@ -75,7 +76,7 @@ export function renderInstanceRow(group, desc, useCascade) {
                   : picked.script,
           }
         : null;
-    const { running, url } = initialState(firstSel);
+    const { running } = initialState(firstSel);
 
     const instanceLabel = isCopy && copyLabel ? copyLabel : useCascade ? '主实例' : '';
 
@@ -123,9 +124,7 @@ export function renderInstanceRow(group, desc, useCascade) {
             ${deleteBtn}
         </div>
         ${defaultLabel ? `<span class="default-hint">默认: ${escapeHtml(defaultLabel)}</span>` : ''}
-        <a class="run-url ${running && url ? 'visible' : ''}" target="_blank" rel="noopener"
-            ${running && url ? `href="${escapeHtml(url)}"` : ''}
-        >${running && url ? escapeHtml(url) : ''}</a>
+        <div class="run-urls"></div>
     </div>`;
 }
 
