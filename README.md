@@ -37,15 +37,19 @@
 
 ## 快速开始
 
+**环境要求**：Node.js **≥ 20**。
+
 ```bash
 git clone https://github.com/wangyanweiie/dev-launcher.git
 cd dev-launcher
 cp config.example.json config.json   # 首次：编辑 scanRoot 为你的项目根目录
-pnpm install --ignore-workspace
+pnpm install --ignore-workspace      # 需完整安装（含 tsx，用于 pnpm start / dev）
 pnpm start    # 生产启动
 # 或
 pnpm dev      # tsx watch，改服务端代码自动重启
 ```
+
+本仓库为 **GitHub 克隆运行**（`package.json` 中 `private: true`，不发布 npm 包）。
 
 启动后默认打开浏览器（`config.json` 中 `"openBrowser": false` 可关闭）。
 
@@ -149,6 +153,7 @@ pnpm dev      # tsx watch，改服务端代码自动重启
 - **多 URL**：同一任务可累积多个本地地址（去重、Vite 517x 端口优先排序展示）。
 - **停止**：标记主动停止 → 杀进程组 → 对已知端口 `lsof` 兜底释放，避免 Vite 孤儿进程。
 - **状态**：`running` / `stopped` / `crashed`（仅非零退出且非主动停止为 crashed）。
+- **安全**：`POST /api/tasks/start` 与 `stop` 仅允许 `cwd` 位于当前生效的 `scanRoot` 之下，否则返回 403。
 
 ---
 
@@ -290,11 +295,14 @@ kill -9 $(lsof -ti :5555)
 ## 开发
 
 ```bash
-pnpm dev   # tsx watch server/index.ts
+pnpm run typecheck   # TypeScript 检查
+pnpm test            # 单元测试（config 路径校验等）
+pnpm dev             # tsx watch server/index.ts
 ```
 
 - 前端为原生 ES Module，改 `public/js` 后刷新浏览器即可。  
-- 目录与模块依赖见 [STRUCTURE.md](STRUCTURE.md)。
+- 目录与模块依赖见 [STRUCTURE.md](STRUCTURE.md)。  
+- 发版前验收见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
 
 ---
 

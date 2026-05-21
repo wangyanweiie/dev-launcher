@@ -106,6 +106,18 @@ export function validateScanRoot(scanRoot: string): { ok: true } | { ok: false; 
 }
 
 /**
+ * 判断任务工作目录是否在扫描根目录之下（含根目录本身）
+ * @param cwd - 任务 cwd（绝对或相对路径）
+ * @param scanRoot - 当前生效的扫描根目录
+ */
+export function isCwdUnderScanRoot(cwd: string, scanRoot: string): boolean {
+    const root = path.resolve(scanRoot);
+    const dir = path.resolve(cwd);
+    if (dir === root) return true;
+    return dir.startsWith(root + path.sep);
+}
+
+/**
  * 启动后打开默认浏览器
  * @param url - 面板地址
  */

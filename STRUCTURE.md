@@ -21,6 +21,7 @@ dev-launcher/
 ├── defaults.json             # 各项目/副本默认子项目与脚本（gitignore）
 ├── instances.json            # 项目副本列表（gitignore）
 ├── CHANGELOG.md              # 版本记录
+├── RELEASE_CHECKLIST.md      # 发版手工验收
 │
 ├── server/                   # 后端 TypeScript（ESM）
 │   ├── index.ts              # HTTP、WebSocket、路由聚合
@@ -95,7 +96,8 @@ index.ts
 | 模块 | 作用 |
 |------|------|
 | `index.ts` | 挂载 Express 与 `/ws`，调用各模块完成 API |
-| `config.ts` | 合并 env、`config.json`、`launcher-settings.json` 得到有效 scanRoot |
+| `config.ts` | 合并 env、`config.json`、`launcher-settings.json`；`isCwdUnderScanRoot` |
+| `config.test.ts` | `isCwdUnderScanRoot` 单元测试 |
 | `settings.ts` | `launcher-settings.json` 持久化 |
 | `scanner.ts` | 扫描 `App`/`Pc` 等分类，产出 `groups` 与 `skipped` |
 | `scan-cache.ts` | 包装 `scanProjects`，供 `index` 缓存失效 |

@@ -19,6 +19,7 @@ import {
     openBrowser,
     resolveEffectiveScanRoot,
     validateScanRoot,
+    isCwdUnderScanRoot,
 } from './config.js';
 import { getCachedProjects, clearScanCache } from './scan-cache.js';
 import { persistScanRoot } from './settings.js';
@@ -93,6 +94,22 @@ function syncConfigScanRoot(): string {
     const scanRoot = resolveEffectiveScanRoot(config);
     applyScanRoot(config, scanRoot);
     return scanRoot;
+}
+
+/**
+ * 校验任务 cwd 位于当前扫描根目录下
+ * @param resolvedCwd - 已 resolve 的任务目录
+ */
+function assertTaskCwdAllowed(
+    resolvedCwd: string,
+): { ok: true } | { ok: false; error: string } {
+    const scanRoot = syncConfigScanRoot();
+    const scanCheck = validateScanRoot(scanRoot);
+    if (!scanCheck.ok) return scanCheck;
+    if (!isCwdUnderScanRoot(resolvedCwd, scanRoot)) {
+        return { ok: false, error: '任务目录不在当前扫描根目录之下' };
+    }
+    return { ok: true };
 }
 
 /** 返回扫描根目录与服务端口 */
@@ -318,6 +335,12 @@ app.post('/api/tasks/start', (req, res) => {
     }
 
     const resolvedCwd = path.resolve(cwd);
+    const cwdCheck = assertTaskCwdAllowed(resolvedCwd);
+    if (!cwdCheck.ok) {
+        res.status(403).json({ error: cwdCheck.error });
+        return;
+    }
+
     const id = taskId(resolvedCwd, scriptName);
     try {
         const result = startTask(id, resolvedCwd, scriptName, packageManager);
@@ -334,7 +357,13 @@ app.post('/api/tasks/stop', async (req, res) => {
         res.status(400).json({ error: '缺少参数' });
         return;
     }
-    const ok = await stopTask(taskId(path.resolve(cwd), scriptName));
+    const resolvedCwd = path.resolve(cwd);
+    const cwdCheck = assertTaskCwdAllowed(resolvedCwd);
+    if (!cwdCheck.ok) {
+        res.status(403).json({ error: cwdCheck.error });
+        return;
+    }
+    const ok = await stopTask(taskId(resolvedCwd, scriptName));
     res.json({ ok });
 });
 

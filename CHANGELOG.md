@@ -2,6 +2,19 @@
 
 本文件记录面向发行的版本变更。功能细节见 [README.md](README.md)。
 
+## [1.0.1] - 2026-05-20
+
+### Added
+
+- `engines.node` ≥ 20；`pnpm run typecheck` / `pnpm test`
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) 发版手工验收清单
+- `isCwdUnderScanRoot`：`/api/tasks/start` 与 `stop` 拒绝扫描根外的 `cwd`（403）
+
+### Changed
+
+- `tsx` 移至 `dependencies`，`pnpm install` 后即可 `pnpm start`
+- README：环境要求、安装说明、安全边界与开发命令
+
 ## [1.0.0] - 2026-05-20
 
 ### Added
@@ -27,4 +40,5 @@
 - `pnpm start` 依赖开发依赖中的 `tsx`（需完整 `pnpm install`）
 - 启动 API 不校验 `cwd` 是否在 `scanRoot` 内（信任本机用户）
 
+[1.0.1]: https://github.com/wangyanweiie/dev-launcher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/wangyanweiie/dev-launcher/releases/tag/v1.0.0
