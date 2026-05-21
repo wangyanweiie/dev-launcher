@@ -2,7 +2,7 @@
  * DOM 事件绑定
  */
 
-import { tabsEl, listEl } from './dom.js';
+import { tabsEl, listEl, servicesTabsEl } from './dom.js';
 import { toggleGroupCollapse } from './collapse.js';
 import {
     formatDefaultLabel,
@@ -18,6 +18,7 @@ import {
 import { updateCardStates } from './tasks.js';
 import { appendLog, showLogForTask } from './log.js';
 import { renderCategoryTabs, renderActiveCategoryListHtml } from './tabs.js';
+import { renderRunningServices, renderServicesCategoryTabs } from './services.js';
 import {
     statuses,
     taskUrls,
@@ -47,8 +48,10 @@ export function finishListRender() {
  */
 export function refreshActiveCategoryView() {
     renderCategoryTabs();
+    renderServicesCategoryTabs();
     renderActiveCategoryListHtml();
     finishListRender();
+    renderRunningServices();
 }
 
 /**
@@ -66,15 +69,20 @@ export function switchCategory(category) {
 /**
  * Tab 点击（事件委托，只绑定一次）
  */
-export function bindCategoryTabs() {
-    if (!tabsEl || tabsEl.dataset.bound) return;
-    tabsEl.dataset.bound = '1';
-    tabsEl.addEventListener('click', (e) => {
+function bindCategoryTabsOn(container) {
+    if (!container || container.dataset.bound) return;
+    container.dataset.bound = '1';
+    container.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-tab]');
         if (!btn) return;
         const cat = btn.getAttribute('data-tab');
         if (cat) switchCategory(cat);
     });
+}
+
+export function bindCategoryTabs() {
+    bindCategoryTabsOn(tabsEl);
+    bindCategoryTabsOn(servicesTabsEl);
 }
 
 /**

@@ -32,6 +32,9 @@ export const sidebarPanelEl = $('#sidebar-panel');
 /** 服务面板 */
 export const servicesPanelEl = $('#services-panel');
 
+/** 服务面板 APP/PC Tab */
+export const servicesTabsEl = $('#services-category-tabs');
+
 /** 运行中服务列表 */
 export const managedListEl = $('#managed-list');
 

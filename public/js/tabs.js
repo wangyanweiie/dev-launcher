@@ -2,7 +2,7 @@
  * APP / PC 分类 Tab
  */
 
-import { tabsEl, listEl } from './dom.js';
+import { tabsEl, listEl, servicesTabsEl } from './dom.js';
 import { collectSubProjects } from './project.js';
 import { renderProjectGroup } from './render.js';
 import {
@@ -14,6 +14,7 @@ import {
 import { groupMatchesFilter } from './filter.js';
 import { searchQuery } from './state.js';
 import { countSkippedInCategory, renderSkippedPanelHtml } from './skipped.js';
+import { sortGroupsByFirstLetter } from './sort.js';
 import { escapeHtml, makeTaskId } from './utils.js';
 import { groupHasOrphanRunning } from './orphan-sync.js';
 
@@ -99,11 +100,12 @@ export function renderCategoryTabs() {
 }
 
 /**
- * 仅更新 Tab 指示器
+ * 同步单个 Tab 栏的选中态与运行指示
+ * @param {HTMLElement | null} container
  */
-export function updateCategoryTabIndicators() {
-    if (!tabsEl || tabsEl.hidden) return;
-    tabsEl.querySelectorAll('[data-tab]').forEach((btn) => {
+function syncCategoryTabBar(container) {
+    if (!container || container.hidden) return;
+    container.querySelectorAll('[data-tab]').forEach((btn) => {
         const cat = btn.getAttribute('data-tab');
         if (!cat) return;
         btn.classList.toggle('active', cat === activeCategory);
@@ -119,6 +121,14 @@ export function updateCategoryTabIndicators() {
             dot.remove();
         }
     });
+}
+
+/**
+ * 仅更新 Tab 指示器（主列表 + 侧栏服务）
+ */
+export function updateCategoryTabIndicators() {
+    syncCategoryTabBar(tabsEl);
+    syncCategoryTabBar(servicesTabsEl);
 }
 
 /**
@@ -143,5 +153,6 @@ export function renderActiveCategoryListHtml() {
         return;
     }
 
-    listEl.innerHTML = filtered.map(renderProjectGroup).join('') + skippedHtml;
+    listEl.innerHTML =
+        sortGroupsByFirstLetter(filtered).map(renderProjectGroup).join('') + skippedHtml;
 }

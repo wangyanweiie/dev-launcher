@@ -28,6 +28,9 @@
     --select-bg: #2a3148;
     --primary-on: #fff;
     --tab-count-bg: rgba(255, 255, 255, 0.08);
+    --services-tab-track: rgba(255, 255, 255, 0.04);
+    --services-tab-hover: rgba(255, 255, 255, 0.05);
+    --services-tab-active: rgba(255, 255, 255, 0.08);
     --row-copy-bg: rgba(91, 141, 239, 0.05);
     --badge-copy-color: #9eb8f0;
     --badge-chip-bg: #2a3148;
@@ -65,6 +68,9 @@
     --select-bg: #f3f5fa;
     --primary-on: #ffffff;
     --tab-count-bg: rgba(0, 0, 0, 0.06);
+    --services-tab-track: rgba(0, 0, 0, 0.04);
+    --services-tab-hover: rgba(0, 0, 0, 0.04);
+    --services-tab-active: rgba(0, 0, 0, 0.06);
     --row-copy-bg: rgba(58, 111, 216, 0.06);
     --badge-copy-color: #3a6fd8;
     --badge-chip-bg: #e4e8f0;
@@ -831,6 +837,85 @@ body {
     flex-direction: column;
     border-bottom: 1px solid var(--border);
     overflow: hidden;
+}
+
+/* 侧栏 APP/PC：分段式淡底，非按钮样式 */
+.services-category-tabs {
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    gap: 2px;
+    margin: 0;
+    padding: 8px 10px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.services-category-tabs::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 8px;
+    height: 32px;
+    border-radius: 7px;
+    background: var(--services-tab-track);
+    pointer-events: none;
+}
+
+.services-category-tabs .category-tab {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    justify-content: center;
+    margin: 0;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.services-category-tabs .category-tab:hover {
+    background: var(--services-tab-hover);
+    color: var(--text);
+}
+
+.services-category-tabs .category-tab.active {
+    color: var(--text);
+    border: none;
+    background: var(--services-tab-active);
+}
+
+.services-category-tabs .category-tab.active[data-tab='App'],
+.services-category-tabs .category-tab.active[data-tab='Pc'] {
+    color: var(--text);
+    border: none;
+    background: var(--services-tab-active);
+}
+
+.services-category-tabs .tab-count {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    opacity: 0.55;
+}
+
+.services-category-tabs .category-tab.active .tab-count {
+    opacity: 0.7;
+}
+
+.services-category-tabs .tab-running-dot {
+    width: 5px;
+    height: 5px;
+    box-shadow: none;
 }
 
 .services-section {

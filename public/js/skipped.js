@@ -3,6 +3,7 @@
  */
 
 import { scanSkipped, searchQuery } from './state.js';
+import { sortByFolderNameFirstLetter } from './sort.js';
 import { escapeHtml } from './utils.js';
 
 /**
@@ -26,7 +27,7 @@ export function renderSkippedPanelHtml(category) {
 
     if (!items.length) return '';
 
-    const rows = items
+    const rows = sortByFolderNameFirstLetter(items)
         .map(
             (s) => `<li class="scan-skipped-item">
                 <span class="scan-skipped-name">${escapeHtml(s.folderName)}</span>

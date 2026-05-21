@@ -5,6 +5,7 @@
 import {
     sidebarPanelEl,
     servicesPanelEl,
+    servicesTabsEl,
     managedListEl,
     historyListEl,
     historySectionEl,
@@ -17,7 +18,11 @@ import {
     historyOrphans,
     orphanRunningByCwd,
     servicesSectionCollapsed,
+    activeCategory,
+    categories,
 } from './state.js';
+import { categoryTabLabel, countRunningInCategory } from './tabs.js';
+import { compareByFirstLetter } from './sort.js';
 import { escapeHtml, parseTaskId } from './utils.js';
 import { appendLog, showLogForTask } from './log.js';
 import { scheduleSidebarLogLayout } from './sidebar-layout.js';
@@ -113,6 +118,7 @@ export function collectManagedServices() {
             scriptName,
             urls: normalizeTaskUrls(taskUrls[tid]),
             label: meta.label,
+            projectName: meta.projectName,
             category: meta.category,
             status,
         });
@@ -139,17 +145,76 @@ export function collectManagedServices() {
             scriptName,
             urls: normalizeTaskUrls(info.urls),
             label: meta.label,
+            projectName: meta.projectName,
             category: match.group.category,
             status: 'external',
             orphanPorts: info.ports,
         });
     }
 
-    return items.sort((a, b) => {
-        const cat = a.category.localeCompare(b.category);
-        if (cat !== 0) return cat;
-        return a.label.localeCompare(b.label);
-    });
+    return items.sort((a, b) =>
+        compareByFirstLetter(a.projectName || a.label, b.projectName || b.label),
+    );
+}
+
+/**
+ * 当前分类下的运行中服务
+ */
+function managedForActiveCategory() {
+    return collectManagedServices().filter((item) => item.category === activeCategory);
+}
+
+/**
+ * 当前分类下的历史服务
+ */
+function historyForActiveCategory() {
+    return [...historyOrphans]
+        .filter((o) => o.category === activeCategory)
+        .sort((a, b) => compareByFirstLetter(a.folderName || a.projectLabel, b.folderName || b.projectLabel));
+}
+
+/**
+ * @param {string} category
+ */
+function countManagedInCategory(category) {
+    return collectManagedServices().filter((item) => item.category === category).length;
+}
+
+/**
+ * @param {string} category
+ */
+function countHistoryInCategory(category) {
+    return historyOrphans.filter((o) => o.category === category).length;
+}
+
+/**
+ * 渲染侧栏服务面板的 APP/PC Tab（与主列表共用 activeCategory）
+ */
+export function renderServicesCategoryTabs() {
+    if (!servicesTabsEl || categories.length < 2) {
+        if (servicesTabsEl) servicesTabsEl.hidden = true;
+        return;
+    }
+
+    servicesTabsEl.hidden = false;
+    servicesTabsEl.innerHTML = categories
+        .map((cat) => {
+            const managedN = countManagedInCategory(cat);
+            const historyN = countHistoryInCategory(cat);
+            const total = managedN + historyN;
+            const running = countRunningInCategory(cat) > 0;
+            const active = cat === activeCategory ? ' active' : '';
+            const runningMark = running
+                ? '<span class="tab-running-dot" title="有运行中项目"></span>'
+                : '';
+            return `<button type="button" class="category-tab${active}" data-tab="${escapeHtml(cat)}"
+                role="tab" aria-selected="${cat === activeCategory}">
+                ${categoryTabLabel(cat)}
+                <span class="tab-count" title="运行中 ${managedN} · 历史 ${historyN}">${total}</span>
+                ${runningMark}
+            </button>`;
+        })
+        .join('');
 }
 
 /**
@@ -180,8 +245,11 @@ function renderOrphanItem(o) {
 export function renderRunningServices() {
     if (!managedListEl) return;
 
-    const managed = collectManagedServices();
-    const historyCount = historyOrphans.length;
+    renderServicesCategoryTabs();
+
+    const managed = managedForActiveCategory();
+    const historyInTab = historyForActiveCategory();
+    const historyCount = historyInTab.length;
 
     const managedCountEl = document.querySelector('#managed-count');
     const historyCountEl = document.querySelector('#history-count');
@@ -244,7 +312,7 @@ export function renderRunningServices() {
         if (!historyCount) {
             historyListEl.innerHTML = '';
         } else {
-            historyListEl.innerHTML = historyOrphans.map(renderOrphanItem).join('');
+            historyListEl.innerHTML = historyInTab.map(renderOrphanItem).join('');
         }
     }
 
