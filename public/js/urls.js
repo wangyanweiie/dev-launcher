@@ -11,15 +11,31 @@ let localHosts = [];
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 
+/** Vite 插件调试入口（vite-plugin-vue-devtools、vite-plugin-inspect） */
+const VITE_DEBUG_PATH_SEGMENTS = ['/__devtools__', '/__inspect__'];
+
+/**
+ * @param {string} url
+ */
+function isAppDevUrl(url) {
+    try {
+        const pathname = new URL(url).pathname;
+        return !VITE_DEBUG_PATH_SEGMENTS.some((seg) => pathname.includes(seg));
+    } catch {
+        return true;
+    }
+}
+
 /**
  * @param {unknown} value
  * @returns {string[]}
  */
 export function normalizeTaskUrls(value) {
+    const keep = (u) => typeof u === 'string' && u && isAppDevUrl(u);
     if (Array.isArray(value)) {
-        return [...new Set(value.filter((u) => typeof u === 'string' && u))];
+        return [...new Set(value.filter(keep))];
     }
-    if (typeof value === 'string' && value) return [value];
+    if (typeof value === 'string' && value && isAppDevUrl(value)) return [value];
     return [];
 }
 

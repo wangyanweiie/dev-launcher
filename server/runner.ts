@@ -56,6 +56,21 @@ type UrlListener = (taskId: string, urls: string[]) => void;
 const URL_RE =
     /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:\/[^\s)\]'">]*)?/gi;
 
+/** Vite 插件在终端打印的调试入口，非业务访问地址 */
+const VITE_DEBUG_PATH_SEGMENTS = ['/__devtools__', '/__inspect__'];
+
+/**
+ * 是否为应在面板展示的应用访问地址（排除 Vite 插件调试路径）
+ */
+function isAppDevUrl(url: string): boolean {
+    try {
+        const pathname = new URL(url).pathname;
+        return !VITE_DEBUG_PATH_SEGMENTS.some((seg) => pathname.includes(seg));
+    } catch {
+        return true;
+    }
+}
+
 /**
  * 去除终端 ANSI 颜色控制符
  * @param text - 原始文本
@@ -73,9 +88,10 @@ function normalizeUrl(raw: string): string | null {
     try {
         const u = new URL(cleaned);
         if (u.hostname === '0.0.0.0') u.hostname = 'localhost';
-        return u.origin + (u.pathname === '/' ? '' : u.pathname);
+        const normalized = u.origin + (u.pathname === '/' ? '' : u.pathname);
+        return isAppDevUrl(normalized) ? normalized : null;
     } catch {
-        return cleaned;
+        return isAppDevUrl(cleaned) ? cleaned : null;
     }
 }
 
@@ -125,8 +141,10 @@ function sortTaskUrls(urls: string[]): string[] {
  * 合并新 URL 到任务列表
  */
 function mergeTaskUrls(existing: string[] | undefined, incoming: string[]): string[] {
-    const set = new Set(existing ?? []);
-    for (const u of incoming) set.add(u);
+    const set = new Set((existing ?? []).filter(isAppDevUrl));
+    for (const u of incoming) {
+        if (isAppDevUrl(u)) set.add(u);
+    }
     return sortTaskUrls([...set]);
 }
 
