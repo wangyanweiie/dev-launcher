@@ -1,5 +1,5 @@
 node_modules/
-pnpm-lock.yaml
+launcher-settings.json
 defaults.json
 instances.json
-launcher-settings.json
+config.json

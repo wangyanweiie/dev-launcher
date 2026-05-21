@@ -15,11 +15,12 @@ dev-launcher/
 ├── pnpm-lock.yaml
 ├── tsconfig.json
 │
-├── config.json               # 扫描根、分类、端口、忽略规则（可提交示例见 config.example.json）
-├── config.example.json
-├── launcher-settings.json    # 界面「保存」写入的 scanRoot（本地生成，gitignore）
+├── config.example.json       # 配置模板（提交仓库）
+├── config.json               # 本地配置（gitignore，从 example 复制）
+├── launcher-settings.json    # 界面「保存」写入的 scanRoot（gitignore）
 ├── defaults.json             # 各项目/副本默认子项目与脚本（gitignore）
 ├── instances.json            # 项目副本列表（gitignore）
+├── CHANGELOG.md              # 版本记录
 │
 ├── server/                   # 后端 TypeScript（ESM）
 │   ├── index.ts              # HTTP、WebSocket、路由聚合

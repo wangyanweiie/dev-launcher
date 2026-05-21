@@ -8,6 +8,18 @@
 
 **仅供本机开发使用**（默认监听 `127.0.0.1`，无鉴权，请勿暴露到局域网或公网）。
 
+### 发行范围（v1.0）
+
+| 项目 | 说明 |
+|------|------|
+| 目标用户 | 本机 / 小团队开发者，自行克隆仓库运行 |
+| 推荐平台 | **macOS**（扫描、启停、Company 历史服务均可用） |
+| Linux | 可扫描与启停；历史服务依赖 `lsof`，与 macOS 类似 |
+| Windows | 可扫描与启停；**无** Company 历史服务与 `lsof` 端口兜底 |
+| 非目标 | 公网部署、多用户鉴权、CI 远程执行 |
+
+首次安装请复制 `config.example.json` 为 `config.json` 并填写本机 `scanRoot`（该文件不会提交到 Git）。
+
 ---
 
 ## 功能概览
@@ -26,7 +38,9 @@
 ## 快速开始
 
 ```bash
-cd tools/dev-launcher
+git clone https://github.com/wangyanweiie/dev-launcher.git
+cd dev-launcher
+cp config.example.json config.json   # 首次：编辑 scanRoot 为你的项目根目录
 pnpm install --ignore-workspace
 pnpm start    # 生产启动
 # 或
@@ -140,7 +154,7 @@ pnpm dev      # tsx watch，改服务端代码自动重启
 
 ## 配置
 
-复制 `config.example.json` 为 `config.json`：
+`config.json` 为本地文件（已在 `.gitignore`），从 `config.example.json` 复制后修改：
 
 | 字段 | 说明 | 默认 |
 |------|------|------|
@@ -204,10 +218,11 @@ pnpm start
 
 ---
 
-## 本地持久化（`.gitignore`）
+## 本地持久化（`.gitignore`，不提交 Git）
 
 | 文件 | 内容 |
 |------|------|
+| `config.json` | 扫描根、端口、忽略规则等 |
 | `launcher-settings.json` | 界面保存的默认 `scanRoot` |
 | `defaults.json` | 各项目/副本默认 `{ subKey, script }` |
 | `instances.json` | 各项目的副本列表 `{ instanceId, createdAt }` |
@@ -220,9 +235,11 @@ pnpm start
 
 ```
 dev-launcher/
-├── config.json / config.example.json
-├── launcher-settings.json   # 运行时生成
-├── defaults.json / instances.json
+├── config.example.json      # 模板（复制为 config.json）
+├── config.json              # 本地配置（gitignore）
+├── launcher-settings.json   # 运行时生成（gitignore）
+├── defaults.json / instances.json   # 本地数据（gitignore）
+├── CHANGELOG.md
 ├── server/
 │   ├── index.ts       # HTTP + WebSocket 入口
 │   ├── config.ts      # 配置加载与校验
