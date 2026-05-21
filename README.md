@@ -57,6 +57,30 @@ pnpm dev      # tsx watch，改服务端代码自动重启
 
 ---
 
+## 最小成本运行（本机，无需部署服务器）
+
+Dev Launcher 是**本机工具**，不部署到公网；在你自己的 Mac 上跑一个 Node 进程即可。
+
+| 方式 | 说明 |
+|------|------|
+| **双击启动（推荐）** | macOS：在 Finder 中双击 `scripts/启动 Dev Launcher.command`，关闭终端窗口即停止 |
+| 命令行 | `bash scripts/start-dev-launcher.sh` 或 `pnpm start` |
+| 开发调试 | `pnpm dev`（改服务端代码自动重启） |
+
+**首次双击前**（只需一次）：
+
+1. 安装 [Node.js](https://nodejs.org/) ≥ 20、`pnpm`（`npm install -g pnpm`）
+2. 若提示无法打开：终端执行 `chmod +x scripts/*.sh scripts/*.command`
+3. 脚本会自动生成 `config.json`；按提示填写 `scanRoot`（项目根目录，如 `~/Company`）
+
+**可选配置**（`config.json`）：
+
+- `wifiIp`：局域网访问地址展示（如 `192.168.4.231`）
+- `openBrowser: false`：启动时不自动打开浏览器
+- `DEV_LAUNCHER_SCAN_ROOT`：环境变量锁定扫描目录（高于配置文件）
+
+---
+
 ## 界面与主要功能
 
 ### 顶栏

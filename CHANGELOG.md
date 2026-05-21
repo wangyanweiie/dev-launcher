@@ -2,6 +2,14 @@
 
 本文件记录面向发行的版本变更。功能细节见 [README.md](README.md)。
 
+## [1.0.3] - 2026-05-20
+
+### Added
+
+- `scripts/start-dev-launcher.sh`：命令行启动，关闭窗口即停止服务
+- `scripts/启动 Dev Launcher.command`：macOS 双击启动入口
+- README「最小成本运行」说明（本机运行，无需部署）
+
 ## [1.0.2] - 2026-05-20
 
 ### Added
@@ -54,6 +62,7 @@
 - `pnpm start` 依赖开发依赖中的 `tsx`（需完整 `pnpm install`）
 - 启动 API 不校验 `cwd` 是否在 `scanRoot` 内（信任本机用户）
 
+[1.0.3]: https://github.com/wangyanweiie/dev-launcher/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/wangyanweiie/dev-launcher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/wangyanweiie/dev-launcher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/wangyanweiie/dev-launcher/releases/tag/v1.0.0

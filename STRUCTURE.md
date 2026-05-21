@@ -22,6 +22,9 @@ dev-launcher/
 ├── instances.json            # 项目副本列表（gitignore）
 ├── CHANGELOG.md              # 版本记录
 ├── RELEASE_CHECKLIST.md      # 发版手工验收
+├── scripts/
+│   ├── start-dev-launcher.sh           # 命令行启动（关窗即停）
+│   └── 启动 Dev Launcher.command       # macOS 双击启动
 │
 ├── server/                   # 后端 TypeScript（ESM）
 │   ├── index.ts              # HTTP、WebSocket、路由聚合
