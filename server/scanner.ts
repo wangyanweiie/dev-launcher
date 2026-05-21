@@ -45,7 +45,7 @@ export interface ProjectGroup {
     rootPath: string;
     /** 根目录可直接运行的脚本（无子项目或 monorepo 根级 dev） */
     root?: SubProject;
-    /** apps/* 等子项目；为空表示单行项目 */
+    /** apps/* 子项目（仅当根目录存在 apps/ 时）；为空表示单行项目 */
     children: SubProject[];
     /** 是否存在子项目 */
     hasChildren: boolean;
@@ -160,47 +160,33 @@ function parsePackageJson(
 }
 
 /**
- * 在 monorepo 根下查找 apps/*、packages/* 及一级子目录中的可运行子项目
- * @param rootPath - monorepo 根路径
+ * 是否存在 apps 目录（monorepo 子项目容器）
+ * @param rootPath - 项目根路径
+ */
+function hasAppsDirectory(rootPath: string): boolean {
+    const appsPath = path.join(rootPath, 'apps');
+    try {
+        return fs.existsSync(appsPath) && fs.statSync(appsPath).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 仅扫描 apps/* 下一层子目录的 package.json（不递归更深，不扫描 blog 等其它目录）
+ * @param rootPath - 项目根路径
  * @param config - 启动器配置
  */
-function findSubProjects(
-    rootPath: string,
-    config: LauncherConfig,
-): SubProject[] {
-    const subDirs = ['apps', 'packages'];
+function findAppsSubProjects(rootPath: string, config: LauncherConfig): SubProject[] {
+    const appsPath = path.join(rootPath, 'apps');
+    if (!fs.existsSync(appsPath)) return [];
+
     const found: SubProject[] = [];
-    /** 已收录的 cwd，避免重复 */
-    const seen = new Set<string>();
 
-    // 扫描 apps、packages 下的子目录
-    for (const sub of subDirs) {
-        const base = path.join(rootPath, sub);
-        if (!fs.existsSync(base)) continue;
-
-        for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
-            if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-            const pkgPath = path.join(base, entry.name, 'package.json');
-            if (!fs.existsSync(pkgPath)) continue;
-
-            const project = parsePackageJson(
-                pkgPath,
-                config.ignoreDirNames,
-                config.ignorePathSegments,
-            );
-            if (project && !seen.has(project.cwd)) {
-                seen.add(project.cwd);
-                found.push(project);
-            }
-        }
-    }
-
-    // 扫描根下其它一级子目录（如 nandateqi_pc/blog）
-    for (const entry of fs.readdirSync(rootPath, { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(appsPath, { withFileTypes: true })) {
         if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
-        if (subDirs.includes(entry.name)) continue;
 
-        const pkgPath = path.join(rootPath, entry.name, 'package.json');
+        const pkgPath = path.join(appsPath, entry.name, 'package.json');
         if (!fs.existsSync(pkgPath)) continue;
 
         const project = parsePackageJson(
@@ -208,10 +194,7 @@ function findSubProjects(
             config.ignoreDirNames,
             config.ignorePathSegments,
         );
-        if (project && !seen.has(project.cwd)) {
-            seen.add(project.cwd);
-            found.push(project);
-        }
+        if (project) found.push(project);
     }
 
     return found.sort((a, b) => a.name.localeCompare(b.name));
@@ -219,6 +202,10 @@ function findSubProjects(
 
 /**
  * 扫描单个项目文件夹，组装 ProjectGroup
+ *
+ * 规则：
+ * - 默认只解析项目根目录 package.json（如 nandateqi_pc 仅一个 dev）
+ * - 若根目录存在 apps/，则改为扫描 apps/* 下各子项的 package.json（如 x-mart、xmart-web）
  * @param rootPath - 项目根路径
  * @param category - 分类名 App/Pc
  * @param config - 启动器配置
@@ -235,20 +222,32 @@ function scanProjectFolder(
         ? parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
         : null;
 
-    const children = findSubProjects(rootPath, config);
+    // 有 apps 目录时走 monorepo 模式，不再把根 package.json 与 blog 等其它子目录算进来
+    if (hasAppsDirectory(rootPath)) {
+        const children = findAppsSubProjects(rootPath, config);
+        if (children.length > 0) {
+            return {
+                id: rootPath,
+                folderName,
+                category,
+                rootPath,
+                children,
+                hasChildren: true,
+            };
+        }
+        // apps 存在但无有效子包时，回退到根目录单项目
+    }
 
-    if (!rootProject && children.length === 0) return null;
-
-    const hasChildren = children.length > 0;
+    if (!rootProject) return null;
 
     return {
         id: rootPath,
         folderName,
         category,
         rootPath,
-        root: rootProject ?? undefined,
-        children,
-        hasChildren,
+        root: rootProject,
+        children: [],
+        hasChildren: false,
     };
 }
 

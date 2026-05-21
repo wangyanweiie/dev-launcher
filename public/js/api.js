@@ -57,22 +57,31 @@ export async function loadTaskLogs() {
  * @param {boolean} [forceRefresh] - 是否绕过扫描缓存
  */
 export async function loadProjects(forceRefresh = false) {
-    loadingEl.style.display = 'block';
-    listEl.innerHTML = '';
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (listEl) listEl.innerHTML = '';
     if (tabsEl) tabsEl.hidden = true;
 
     const url = forceRefresh ? '/api/projects?refresh=1' : '/api/projects';
-    const res = await fetch(url);
+    let res;
+    try {
+        res = await fetch(url);
+    } catch (e) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (listEl) {
+            listEl.innerHTML = `<p class="loading">请求失败: ${escapeHtml(String(e?.message || e))}</p>`;
+        }
+        return;
+    }
     const data = await res.json();
 
     applyProjectsPayload(data);
-    loadingEl.style.display = 'none';
+    if (loadingEl) loadingEl.style.display = 'none';
 
     if (scanError) {
         listEl.innerHTML = `<div class="state-error">
             <p class="state-error-title">无法扫描项目</p>
             <p class="state-error-msg">${escapeHtml(scanError)}</p>
-            <p class="state-error-hint">请检查 config.json 的 scanRoot，或设置环境变量 <code>DEV_LAUNCHER_SCAN_ROOT</code></p>
+            <p class="state-error-hint">请在顶栏修改扫描目录并点击「保存默认」，或设置环境变量 <code>DEV_LAUNCHER_SCAN_ROOT</code></p>
         </div>`;
         renderRunningServices();
         return;

@@ -31,14 +31,24 @@ pnpm start    # 或 pnpm dev（watch 模式）
 
 | 字段 | 说明 |
 |------|------|
-| `scanRoot` | 扫描根目录 |
+| `scanRoot` | 扫描根目录（可留空；留空时使用当前工作目录，并可在界面保存默认） |
 | `categories` | 子目录分类，如 `App`、`Pc` |
 | `port` | 面板端口，默认 `3847` |
 | `host` | 监听地址，默认 `127.0.0.1` |
 | `openBrowser` | 启动后是否打开浏览器 |
 | `scanCacheSeconds` | 扫描缓存秒数，默认 `30`；点「刷新」强制重扫 |
 
-### 环境变量（覆盖 config.json）
+### 扫描目录
+
+顶栏可编辑扫描路径：
+
+1. **保存** — 写入 `launcher-settings.json` 作为默认路径（不扫描）
+2. **扫描** — 按输入框路径扫描项目列表
+3. **当前目录** — 填入启动 dev-launcher 时的工作目录
+
+未保存时的优先级：`DEV_LAUNCHER_SCAN_ROOT` → `launcher-settings.json` → `config.json` → **当前工作目录**。
+
+### 环境变量（最高优先级）
 
 ```bash
 export DEV_LAUNCHER_SCAN_ROOT=/path/to/Company

@@ -2,9 +2,40 @@
  * 日志面板
  */
 
-import { logBody, logTitle } from './dom.js';
+import { logBody, logPanelEl, logPanelToggleEl, logTitle } from './dom.js';
+import { scheduleSidebarLogLayout } from './sidebar-layout.js';
 import { activeLogTask, logLines, MAX_LOG, setActiveLogTask } from './state.js';
 import { escapeHtml } from './utils.js';
+
+/** 日志面板是否折叠 */
+let logPanelCollapsed = false;
+
+/**
+ * 同步日志折叠态到 DOM
+ */
+export function syncLogPanelCollapse() {
+    logPanelEl?.classList.toggle('collapsed', logPanelCollapsed);
+    logPanelToggleEl?.setAttribute('aria-expanded', String(!logPanelCollapsed));
+    scheduleSidebarLogLayout();
+}
+
+/**
+ * 切换日志面板折叠
+ */
+export function toggleLogPanel() {
+    logPanelCollapsed = !logPanelCollapsed;
+    syncLogPanelCollapse();
+}
+
+/**
+ * 绑定日志标题栏折叠点击
+ */
+export function bindLogPanelCollapse() {
+    if (!logPanelToggleEl || logPanelToggleEl.dataset.bound) return;
+    logPanelToggleEl.dataset.bound = '1';
+    logPanelToggleEl.addEventListener('click', toggleLogPanel);
+    syncLogPanelCollapse();
+}
 
 /**
  * 追加日志
@@ -39,6 +70,7 @@ export function renderLogPanel(taskId) {
         })
         .join('');
     logBody.scrollTop = logBody.scrollHeight;
+    scheduleSidebarLogLayout();
 }
 
 /**

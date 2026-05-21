@@ -13,6 +13,7 @@ import { resolveTaskMeta } from './project.js';
 import { statuses, taskUrls, taskExitCodes, orphanServices, servicesSectionCollapsed } from './state.js';
 import { escapeHtml, parseTaskId } from './utils.js';
 import { appendLog, showLogForTask } from './log.js';
+import { scheduleSidebarLogLayout } from './sidebar-layout.js';
 
 /** @typedef {import('./types.js').OrphanService} OrphanService */
 
@@ -50,7 +51,6 @@ function renderServiceCard(opts) {
 export function syncServicesSidebarLayout() {
     if (!sidebarPanelEl) return;
 
-    const historyVisible = historySectionEl && !historySectionEl.hidden;
     const managedEl = document.querySelector('[data-section="managed"]');
     const historyEl = document.querySelector('[data-section="history"]');
 
@@ -66,17 +66,7 @@ export function syncServicesSidebarLayout() {
         toggleHistory.setAttribute('aria-expanded', String(!servicesSectionCollapsed.history));
     }
 
-    const allCollapsed =
-        servicesSectionCollapsed.managed &&
-        (!historyVisible || servicesSectionCollapsed.history);
-
-    sidebarPanelEl.classList.toggle('services-all-collapsed', allCollapsed);
-    sidebarPanelEl.classList.toggle(
-        'services-partial-collapsed',
-        !allCollapsed &&
-            (servicesSectionCollapsed.managed ||
-                (historyVisible && servicesSectionCollapsed.history)),
-    );
+    scheduleSidebarLogLayout();
 }
 
 /**

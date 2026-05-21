@@ -1,6 +1,9 @@
 {
     "scanRoot": "/Users/lemon/Company",
-    "categories": ["App", "Pc"],
+    "categories": [
+        "App",
+        "Pc"
+    ],
     "port": 3847,
     "host": "127.0.0.1",
     "openBrowser": true,

@@ -1,4 +1,5 @@
-:root {
+:root,
+[data-theme='dark'] {
     --bg: #0f1117;
     --surface: #1a1d27;
     --surface-hover: #222633;
@@ -9,9 +10,64 @@
     --accent-hover: #7aa3f5;
     --success: #3dd68c;
     --danger: #f07178;
+    --dot-idle: #4a5068;
+    --dot-external: #8b92a8;
+    --accent-soft: rgba(91, 141, 239, 0.12);
+    --accent-soft-strong: rgba(91, 141, 239, 0.18);
+    --accent-border: rgba(91, 141, 239, 0.25);
+    --danger-soft: rgba(240, 113, 120, 0.15);
+    --danger-border: rgba(240, 113, 120, 0.35);
+    --success-soft: rgba(61, 214, 140, 0.15);
+    --success-glow: rgba(61, 214, 140, 0.45);
+    --danger-glow: rgba(240, 113, 120, 0.5);
+    --tag-pc-color: #7ec8ff;
+    --tag-pc-bg: rgba(91, 141, 239, 0.15);
+    --tag-app-color: #b8a0ff;
+    --tag-app-bg: rgba(184, 160, 255, 0.12);
+    --tag-app-border: rgba(184, 160, 255, 0.45);
+    --select-bg: #2a3148;
+    --primary-on: #fff;
+    --tab-count-bg: rgba(255, 255, 255, 0.08);
+    --row-copy-bg: rgba(91, 141, 239, 0.05);
+    --badge-copy-color: #9eb8f0;
+    --badge-chip-bg: #2a3148;
     --radius: 10px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC',
         'Microsoft YaHei', sans-serif;
+}
+
+[data-theme='light'] {
+    --bg: #eef0f5;
+    --surface: #ffffff;
+    --surface-hover: #e8ebf3;
+    --border: #d2d8e4;
+    --text: #141820;
+    --text-muted: #5c6578;
+    --accent: #3a6fd8;
+    --accent-hover: #2d5fc4;
+    --success: #15803d;
+    --danger: #c53030;
+    --dot-idle: #b4bac6;
+    --dot-external: #7a8496;
+    --accent-soft: rgba(58, 111, 216, 0.1);
+    --accent-soft-strong: rgba(58, 111, 216, 0.16);
+    --accent-border: rgba(58, 111, 216, 0.28);
+    --danger-soft: rgba(197, 48, 48, 0.1);
+    --danger-border: rgba(197, 48, 48, 0.32);
+    --success-soft: rgba(21, 128, 61, 0.12);
+    --success-glow: rgba(21, 128, 61, 0.35);
+    --danger-glow: rgba(197, 48, 48, 0.35);
+    --tag-pc-color: #2563b8;
+    --tag-pc-bg: rgba(58, 111, 216, 0.12);
+    --tag-app-color: #6d4fc7;
+    --tag-app-bg: rgba(109, 79, 199, 0.1);
+    --tag-app-border: rgba(109, 79, 199, 0.35);
+    --select-bg: #f3f5fa;
+    --primary-on: #ffffff;
+    --tab-count-bg: rgba(0, 0, 0, 0.06);
+    --row-copy-bg: rgba(58, 111, 216, 0.06);
+    --badge-copy-color: #3a6fd8;
+    --badge-chip-bg: #e4e8f0;
 }
 
 *,
@@ -57,12 +113,55 @@ body {
     color: var(--danger);
 }
 
+.scan-root-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+
+.scan-root-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.scan-root-input {
+    flex: 1;
+    min-width: 200px;
+    max-width: 420px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--select-bg);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.scan-root-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.scan-root-input:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+}
+
 .search-input {
     width: 180px;
     padding: 6px 12px;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--select-bg);
     color: var(--text);
     font-size: 0.85rem;
 }
@@ -103,7 +202,40 @@ body {
 
 .header-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.theme-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.theme-icon-sun {
+    display: none;
+}
+
+.theme-icon-moon {
+    display: inline;
+}
+
+[data-theme='light'] .theme-icon-sun {
+    display: inline;
+}
+
+[data-theme='light'] .theme-icon-moon {
+    display: none;
+}
+
+.theme-toggle-label {
+    font-size: 0.78rem;
 }
 
 .main {
@@ -143,24 +275,24 @@ body {
 .category-tab.active {
     color: var(--text);
     border-color: var(--accent);
-    background: rgba(91, 141, 239, 0.12);
+    background: var(--accent-soft);
 }
 
 .category-tab.active[data-tab='App'] {
-    color: #7ec8ff;
+    color: var(--tag-pc-color);
 }
 
 .category-tab.active[data-tab='Pc'] {
-    color: #b8a0ff;
-    border-color: rgba(184, 160, 255, 0.45);
-    background: rgba(184, 160, 255, 0.1);
+    color: var(--tag-app-color);
+    border-color: var(--tag-app-border);
+    background: var(--tag-app-bg);
 }
 
 .tab-count {
     font-size: 0.72rem;
     padding: 1px 7px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--tab-count-bg);
     color: var(--text-muted);
 }
 
@@ -174,7 +306,7 @@ body {
     height: 6px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 6px rgba(61, 214, 140, 0.5);
+    box-shadow: 0 0 6px var(--success-glow);
     flex-shrink: 0;
 }
 
@@ -220,7 +352,7 @@ body {
     margin-left: 8px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 6px rgba(61, 214, 140, 0.5);
+    box-shadow: 0 0 6px var(--success-glow);
     vertical-align: middle;
 }
 
@@ -268,7 +400,7 @@ body {
 }
 
 .instance-row--copy {
-    background: rgba(91, 141, 239, 0.05);
+    background: var(--row-copy-bg);
     padding-left: 28px;
 }
 
@@ -287,13 +419,13 @@ body {
 }
 
 .badge-copy {
-    color: #9eb8f0;
-    background: rgba(91, 141, 239, 0.18);
+    color: var(--badge-copy-color);
+    background: var(--accent-soft-strong);
 }
 
 .badge-copy-count {
-    color: #9eb8f0;
-    background: rgba(91, 141, 239, 0.12);
+    color: var(--badge-copy-color);
+    background: var(--accent-soft);
 }
 
 .btn-duplicate {
@@ -305,11 +437,11 @@ body {
     font-size: 0.72rem;
     padding: 6px 10px;
     color: var(--danger);
-    border-color: rgba(240, 113, 120, 0.35);
+    border-color: var(--danger-border);
 }
 
 .btn-delete-copy:hover:not(:disabled) {
-    background: rgba(240, 113, 120, 0.12);
+    background: var(--danger-soft);
 }
 
 /* 单子项目：无 instance-label 时与旧版 project-row 一致 */
@@ -322,17 +454,17 @@ body {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #4a5068;
+    background: var(--dot-idle);
 }
 
 .status-dot.running {
     background: var(--success);
-    box-shadow: 0 0 8px rgba(61, 214, 140, 0.5);
+    box-shadow: 0 0 8px var(--success-glow);
 }
 
 .status-dot.crashed {
     background: var(--danger);
-    box-shadow: 0 0 8px rgba(240, 113, 120, 0.5);
+    box-shadow: 0 0 8px var(--danger-glow);
 }
 
 .run-url.crashed-hint {
@@ -365,19 +497,19 @@ body {
     font-size: 0.7rem;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #2a3148;
+    background: var(--badge-chip-bg);
     color: var(--text-muted);
     flex-shrink: 0;
 }
 
 .badge.app {
-    color: #7ec8ff;
-    background: rgba(91, 141, 239, 0.15);
+    color: var(--tag-pc-color);
+    background: var(--tag-pc-bg);
 }
 
 .badge.pc {
-    color: #b8a0ff;
-    background: rgba(184, 160, 255, 0.12);
+    color: var(--tag-app-color);
+    background: var(--tag-app-bg);
 }
 
 .select-cascade {
@@ -398,7 +530,7 @@ body {
     padding: 7px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--select-bg);
     color: var(--text);
     font-size: 0.82rem;
     cursor: pointer;
@@ -497,7 +629,7 @@ body {
 
 .btn-primary {
     background: var(--accent);
-    color: #fff;
+    color: var(--primary-on);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -517,13 +649,13 @@ body {
 }
 
 .btn-danger {
-    background: rgba(240, 113, 120, 0.15);
+    background: var(--danger-soft);
     color: var(--danger);
-    border: 1px solid rgba(240, 113, 120, 0.3);
+    border: 1px solid var(--danger-border);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: rgba(240, 113, 120, 0.25);
+    background: var(--danger-border);
 }
 
 .btn-stop {
@@ -535,7 +667,7 @@ body {
 }
 
 .btn-stop:hover:not(:disabled) {
-    background: rgba(240, 113, 120, 0.12);
+    background: var(--danger-soft);
 }
 
 .btn-icon {
@@ -555,11 +687,11 @@ body {
     background: var(--surface);
     min-height: 0;
     width: 360px;
+    overflow: hidden;
 }
 
 .services-panel {
-    flex: 0 1 auto;
-    max-height: 42vh;
+    flex: 0 0 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -631,14 +763,14 @@ body {
     font-size: 0.68rem;
     padding: 1px 7px;
     border-radius: 999px;
-    background: rgba(61, 214, 140, 0.15);
+    background: var(--success-soft);
     color: var(--success);
     flex-shrink: 0;
 }
 
 .services-section-body {
     overflow: hidden;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
 }
 
@@ -648,35 +780,11 @@ body {
 
 .services-list {
     overflow-y: auto;
-    max-height: 22vh;
     padding: 6px 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
-}
-
-/* 区块折叠后：服务面板变矮，日志区占据剩余空间 */
-.sidebar-panel.services-partial-collapsed .services-panel {
-    max-height: 28vh;
-}
-
-.sidebar-panel.services-partial-collapsed .services-list {
-    max-height: 16vh;
-}
-
-.sidebar-panel.services-partial-collapsed .log-panel {
-    flex: 1;
-    min-height: 38vh;
-}
-
-.sidebar-panel.services-all-collapsed .services-panel {
-    flex: 0 0 auto;
-    max-height: none;
-}
-
-.sidebar-panel.services-all-collapsed .log-panel {
-    flex: 1;
-    min-height: 55vh;
+    min-height: 0;
 }
 
 .services-empty {
@@ -726,12 +834,12 @@ body {
     height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #4a5068;
+    background: var(--dot-idle);
 }
 
 .service-dot.running {
     background: var(--success);
-    box-shadow: 0 0 6px rgba(61, 214, 140, 0.45);
+    box-shadow: 0 0 6px var(--success-glow);
 }
 
 .service-dot.crashed {
@@ -739,11 +847,11 @@ body {
 }
 
 .service-dot.external {
-    background: #8b92a8;
+    background: var(--dot-external);
 }
 
 .service-item.crashed {
-    border-color: rgba(240, 113, 120, 0.35);
+    border-color: var(--danger-border);
 }
 
 .service-item.external {
@@ -751,14 +859,14 @@ body {
 }
 
 .service-item.company {
-    border-color: rgba(91, 141, 239, 0.25);
+    border-color: var(--accent-border);
 }
 
 .service-badge {
     font-size: 0.62rem;
     padding: 1px 6px;
     border-radius: 4px;
-    background: rgba(91, 141, 239, 0.15);
+    background: var(--accent-soft);
     color: var(--accent);
     flex-shrink: 0;
 }
@@ -809,22 +917,72 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
 
-.log-header {
+.log-header-bar {
+    display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.log-panel-toggle {
+    flex: 1;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    min-width: 0;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text);
     font-size: 0.85rem;
     font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.log-panel-toggle:hover {
+    background: var(--surface-hover);
+}
+
+.log-title-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.log-header-bar .btn-icon {
+    align-self: center;
+    margin-right: 8px;
+}
+
+.log-panel.collapsed {
+    flex: 0 0 auto;
+}
+
+.log-panel.collapsed .log-body {
+    display: none;
+}
+
+.log-panel.collapsed .log-header-bar {
+    border-bottom: none;
+}
+
+.log-panel.collapsed .log-panel-toggle .section-chevron::before {
+    transform: rotate(-45deg);
 }
 
 .log-body {
     flex: 1;
     margin: 0;
     padding: 12px 14px;
+    min-height: 0;
     overflow-y: auto;
     font-family: 'SF Mono', Menlo, Consolas, monospace;
     font-size: 0.72rem;
@@ -856,18 +1014,6 @@ body {
         border-left: none;
         border-top: 1px solid var(--border);
         width: auto;
-    }
-
-    .services-panel {
-        max-height: 180px;
-    }
-
-    .sidebar-panel.services-all-collapsed .log-panel {
-        min-height: 140px;
-    }
-
-    .services-list {
-        max-height: 120px;
     }
 
     .project-group-header {

@@ -20,7 +20,9 @@ export function connectWs() {
             if (msg.status === 'stopped' || msg.status === 'crashed') {
                 delete taskUrls[msg.taskId];
             }
-            if (msg.exitCode !== undefined && msg.exitCode !== null) {
+            if (msg.status === 'stopped') {
+                delete taskExitCodes[msg.taskId];
+            } else if (msg.exitCode !== undefined && msg.exitCode !== null) {
                 taskExitCodes[msg.taskId] = msg.exitCode;
             }
             if (msg.status === 'running') {

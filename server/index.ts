@@ -12,8 +12,16 @@ import {
     taskId,
     type ProjectGroup,
 } from './scanner.js';
-import { loadConfig, openBrowser, validateScanRoot } from './config.js';
-import { getCachedProjects } from './scan-cache.js';
+import {
+    applyScanRoot,
+    getDefaultScanRoot,
+    loadConfig,
+    openBrowser,
+    resolveEffectiveScanRoot,
+    validateScanRoot,
+} from './config.js';
+import { getCachedProjects, clearScanCache } from './scan-cache.js';
+import { persistScanRoot } from './settings.js';
 import { detectOrphanServices, killByPort, portFromUrl } from './orphans.js';
 import { readDefaults, setProjectDefault } from './defaults.js';
 import { addInstance, readInstances, removeInstance } from './instances.js';
@@ -80,20 +88,88 @@ function collectTaskIds(groups: ProjectGroup[]): string[] {
     return ids;
 }
 
+/** 同步内存中的扫描路径（从已保存配置读取） */
+function syncConfigScanRoot(): string {
+    const scanRoot = resolveEffectiveScanRoot(config);
+    applyScanRoot(config, scanRoot);
+    return scanRoot;
+}
+
 /** 返回扫描根目录与服务端口 */
 app.get('/api/config', (_req, res) => {
-    const scanCheck = validateScanRoot(config.scanRoot);
+    const scanRoot = syncConfigScanRoot();
+    const scanCheck = validateScanRoot(scanRoot);
     res.json({
-        scanRoot: config.scanRoot,
+        scanRoot,
+        defaultScanRoot: getDefaultScanRoot(),
         port: config.port,
         host: config.host,
         scanOk: scanCheck.ok,
         scanError: scanCheck.ok ? undefined : scanCheck.error,
+        scanRootFromEnv: !!process.env.DEV_LAUNCHER_SCAN_ROOT?.trim(),
+    });
+});
+
+/** 保存默认扫描目录（不触发扫描） */
+app.post('/api/settings/scan-root/save', (req, res) => {
+    const { scanRoot } = req.body as { scanRoot?: string };
+
+    if (!scanRoot?.trim()) {
+        res.status(400).json({ error: '请填写扫描目录' });
+        return;
+    }
+
+    const resolved = path.resolve(scanRoot.trim());
+    const scanCheck = validateScanRoot(resolved);
+    if (!scanCheck.ok) {
+        res.status(400).json({ error: scanCheck.error });
+        return;
+    }
+
+    try {
+        persistScanRoot(resolved);
+    } catch (e) {
+        res.status(500).json({ error: (e as Error).message });
+        return;
+    }
+    applyScanRoot(config, resolved);
+
+    res.json({
+        ok: true,
+        scanRoot: resolved,
+        message: '已保存到 config.json 与 launcher-settings.json',
+    });
+});
+
+/** 使用输入路径执行扫描（不写入默认配置） */
+app.post('/api/settings/scan', (req, res) => {
+    const { scanRoot } = req.body as { scanRoot?: string };
+
+    if (!scanRoot?.trim()) {
+        res.status(400).json({ error: '请填写扫描目录' });
+        return;
+    }
+
+    const resolved = path.resolve(scanRoot.trim());
+    const scanCheck = validateScanRoot(resolved);
+    if (!scanCheck.ok) {
+        res.status(400).json({ error: scanCheck.error });
+        return;
+    }
+
+    applyScanRoot(config, resolved);
+    clearScanCache();
+
+    res.json({
+        ok: true,
+        scanRoot: config.scanRoot,
+        scanOk: true,
     });
 });
 
 /** 扫描项目列表，附带运行状态、URL、默认配置、外部监听 */
 app.get('/api/projects', async (req, res) => {
+    syncConfigScanRoot();
     const scanCheck = validateScanRoot(config.scanRoot);
     const force = req.query.refresh === '1';
 
@@ -249,19 +325,19 @@ app.post('/api/tasks/start', (req, res) => {
 });
 
 /** 停止指定任务 */
-app.post('/api/tasks/stop', (req, res) => {
+app.post('/api/tasks/stop', async (req, res) => {
     const { cwd, scriptName } = req.body as { cwd?: string; scriptName?: string };
     if (!cwd || !scriptName) {
         res.status(400).json({ error: '缺少参数' });
         return;
     }
-    const ok = stopTask(taskId(path.resolve(cwd), scriptName));
+    const ok = await stopTask(taskId(path.resolve(cwd), scriptName));
     res.json({ ok });
 });
 
 /** 停止所有正在运行的任务 */
-app.post('/api/tasks/stop-all', (_req, res) => {
-    stopAll();
+app.post('/api/tasks/stop-all', async (_req, res) => {
+    await stopAll();
     res.json({ ok: true });
 });
 

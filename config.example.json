@@ -1,5 +1,5 @@
 {
-    "scanRoot": "/Users/you/Company",
+    "scanRoot": "",
     "categories": ["App", "Pc"],
     "port": 3847,
     "host": "127.0.0.1",

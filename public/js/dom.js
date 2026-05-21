@@ -17,6 +17,12 @@ export const loadingEl = $('#loading');
 /** 日志内容区 */
 export const logBody = $('#log-body');
 
+/** 日志面板 */
+export const logPanelEl = $('#log-panel');
+
+/** 日志折叠按钮 */
+export const logPanelToggleEl = $('#log-panel-toggle');
+
 /** 日志标题 */
 export const logTitle = $('#log-title');
 
@@ -43,3 +49,9 @@ export const servicesCountEl = $('#managed-count');
 
 /** 项目搜索框 */
 export const projectSearchEl = $('#project-search');
+
+/** 扫描目录输入 */
+export const scanRootInputEl = $('#scan-root-input');
+
+/** 扫描目录提示 */
+export const scanRootHintEl = $('#scan-root-hint');

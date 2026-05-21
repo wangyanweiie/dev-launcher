@@ -1,18 +1,58 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Dev Launcher</title>
+        <script>
+            (function () {
+                var t = localStorage.getItem('dl-theme');
+                if (t === 'light' || t === 'dark') {
+                    document.documentElement.setAttribute('data-theme', t);
+                } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            })();
+        </script>
         <link rel="stylesheet" href="/styles.css" />
     </head>
     <body>
         <header class="header">
             <div class="header-left">
                 <h1>Dev Launcher</h1>
-                <p class="subtitle" id="scan-root"></p>
+                <div class="scan-root-bar" id="scan-root-bar">
+                    <label class="scan-root-label" for="scan-root-input">扫描目录</label>
+                    <input
+                        type="text"
+                        id="scan-root-input"
+                        class="scan-root-input"
+                        spellcheck="false"
+                        title="项目根目录，其下需含 App、Pc 等分类子文件夹"
+                    />
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-use-cwd" title="使用启动时的当前目录">
+                        当前目录
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-save-scan-root" title="保存为默认路径（不扫描）">
+                        保存
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-scan-root" title="按当前路径扫描项目">
+                        扫描
+                    </button>
+                </div>
+                <p class="subtitle subtitle-warn" id="scan-root-hint" hidden></p>
             </div>
             <div class="header-actions">
+                <button
+                    type="button"
+                    class="btn btn-ghost theme-toggle"
+                    id="btn-theme-toggle"
+                    aria-pressed="false"
+                    title="切换到日间模式"
+                >
+                    <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+                    <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+                    <span class="theme-toggle-label">日间</span>
+                </button>
                 <input
                     type="search"
                     id="project-search"
@@ -20,7 +60,7 @@
                     placeholder="搜索项目…"
                     autocomplete="off"
                 />
-                <button type="button" class="btn btn-ghost" id="btn-refresh" title="强制重新扫描">刷新</button>
+                <button type="button" class="btn btn-ghost" id="btn-refresh" title="强制重新扫描当前目录">刷新列表</button>
                 <button type="button" class="btn btn-danger" id="btn-stop-all">全部停止</button>
             </div>
         </header>
@@ -36,7 +76,7 @@
                 <div class="services-section" data-section="managed" id="services-section-managed">
                     <button type="button" class="services-section-toggle" data-section="managed" aria-expanded="true">
                         <span class="section-chevron" aria-hidden="true"></span>
-                        <span class="section-title">运行中的服务</span>
+                        <span class="section-title">正在运行中的服务</span>
                         <span class="section-count" id="managed-count">0</span>
                     </button>
                     <div class="services-section-body">
@@ -55,8 +95,17 @@
                 </div>
             </section>
             <section class="log-panel" id="log-panel">
-                <div class="log-header">
-                    <span id="log-title">日志</span>
+                <div class="log-header-bar">
+                    <button
+                        type="button"
+                        class="log-panel-toggle"
+                        id="log-panel-toggle"
+                        aria-expanded="true"
+                        title="点击折叠/展开日志"
+                    >
+                        <span class="section-chevron" aria-hidden="true"></span>
+                        <span id="log-title" class="log-title-text">日志</span>
+                    </button>
                     <button type="button" class="btn-icon" id="btn-clear-log" title="清空">×</button>
                 </div>
                 <pre class="log-body" id="log-body"></pre>

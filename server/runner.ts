@@ -6,6 +6,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { exec } from 'node:child_process';
 import path from 'node:path';
+import { killByPort, portFromUrl } from './orphans.js';
 import type { PackageManager } from './scanner.js';
 
 /** 进程运行状态 */
@@ -110,6 +111,9 @@ function isBetterUrl(current: string | undefined, next: string): boolean {
 
 /** 运行中的子进程映射：taskId -> { proc, meta } */
 const processes = new Map<string, { proc: ChildProcess; meta: RunningTask }>();
+
+/** 用户主动停止中的任务（exit 时不应记为 crashed） */
+const stoppingTasks = new Set<string>();
 
 /** 进程结束后的最近状态（用于 crashed 展示，下次启动前保留） */
 const lastKnownState = new Map<
@@ -236,16 +240,13 @@ export function startTask(
 
     const resolvedCwd = path.resolve(cwd);
     const { cmd, args } = buildArgs(packageManager, scriptName);
+    // macOS/Linux 使用 detached 让子进程成为独立进程组，便于 kill -PID 整树终止；勿 unref，否则无法可靠 stop
     const proc = spawn(cmd, args, {
         cwd: resolvedCwd,
         detached: process.platform !== 'win32',
         env: { ...process.env, FORCE_COLOR: '1' },
         stdio: ['ignore', 'pipe', 'pipe'],
     });
-
-    if (process.platform !== 'win32') {
-        proc.unref();
-    }
 
     const meta: RunningTask = {
         taskId,
@@ -279,12 +280,16 @@ export function startTask(
 
     proc.on('exit', (code, signal) => {
         processes.delete(taskId);
-        const crashed = code !== 0 && code !== null;
+        const intentionalStop = stoppingTasks.delete(taskId);
+        const crashed = !intentionalStop && code !== 0 && code !== null;
         meta.status = crashed ? 'crashed' : 'stopped';
-        meta.exitCode = code;
+        meta.exitCode = crashed ? code : null;
         meta.url = undefined;
-        lastKnownState.set(taskId, { status: meta.status, exitCode: code });
-        onStatus(taskId, meta.status, code);
+        lastKnownState.set(taskId, {
+            status: meta.status,
+            exitCode: crashed ? code : undefined,
+        });
+        onStatus(taskId, meta.status, crashed ? code : undefined);
         if (crashed) {
             const hint = signal ? `信号 ${signal}` : `退出码 ${code}`;
             recordLog(taskId, `[dev-launcher] 进程已异常退出 (${hint})`);
@@ -299,47 +304,71 @@ export function startTask(
 
 /**
  * 终止进程及其子进程（npm/vite 等）
- * @param pid - 根进程 PID
+ * @param pid - 根进程 PID（detached 启动时为进程组组长）
  */
-function killProcessTree(pid: number): void {
-    if (!pid || pid <= 0) return;
+function killProcessTree(pid: number): Promise<void> {
+    if (!pid || pid <= 0) return Promise.resolve();
 
     if (process.platform === 'win32') {
-        exec(`taskkill /PID ${pid} /T /F`, () => {});
-        return;
+        return new Promise((resolve) => {
+            exec(`taskkill /PID ${pid} /T /F`, () => resolve());
+        });
     }
 
-    const term = `(pkill -TERM -P ${pid} 2>/dev/null; kill -TERM ${pid} 2>/dev/null; kill -TERM -${pid} 2>/dev/null) || true`;
-    exec(term, () => {});
+    const term = [
+        `kill -TERM -${pid} 2>/dev/null`,
+        `pkill -TERM -P ${pid} 2>/dev/null`,
+        `kill -TERM ${pid} 2>/dev/null`,
+    ].join('; ');
 
-    setTimeout(() => {
-        const kill = `(pkill -KILL -P ${pid} 2>/dev/null; kill -KILL ${pid} 2>/dev/null) || true`;
-        exec(kill, () => {});
-    }, 1200);
+    const kill = [
+        `kill -KILL -${pid} 2>/dev/null`,
+        `pkill -KILL -P ${pid} 2>/dev/null`,
+        `kill -KILL ${pid} 2>/dev/null`,
+    ].join('; ');
+
+    return new Promise((resolve) => {
+        exec(`${term}; true`, () => {
+            setTimeout(() => {
+                exec(`${kill}; true`, () => resolve());
+            }, 450);
+        });
+    });
 }
 
 /**
- * 停止指定任务
+ * 停止指定任务（进程组 + 已知端口兜底，避免 vite 孤儿占用 3100 等）
  * @param taskId - 任务 ID
  */
-export function stopTask(taskId: string): boolean {
+export async function stopTask(taskId: string): Promise<boolean> {
     const entry = processes.get(taskId);
     if (!entry) return false;
 
-    const { proc } = entry;
+    // 必须在 kill 之前标记，否则 exit(1) 会与「主动停止」竞态并误报 crashed
+    stoppingTasks.add(taskId);
+
+    const { proc, meta } = entry;
     const pid = proc.pid;
+    const port = meta.url ? portFromUrl(meta.url) : null;
+
+    meta.url = undefined;
+    meta.status = 'stopped';
+    processes.delete(taskId);
 
     try {
         proc.kill('SIGTERM');
     } catch {
-        /* 已由 killProcessTree 处理 */
+        /* killProcessTree / killByPort 兜底 */
     }
 
-    if (pid) killProcessTree(pid);
+    if (pid) await killProcessTree(pid);
+    if (port) {
+        const killed = await killByPort(port);
+        if (killed) {
+            recordLog(taskId, `[dev-launcher] 已释放端口 ${port}`);
+        }
+    }
 
-    entry.meta.url = undefined;
-    entry.meta.status = 'stopped';
-    processes.delete(taskId);
     lastKnownState.set(taskId, { status: 'stopped' });
     onStatus(taskId, 'stopped');
     recordLog(taskId, '[dev-launcher] 已停止');
@@ -403,8 +432,8 @@ export function getManagedPorts(): Set<number> {
 /**
  * 停止所有正在运行的任务
  */
-export function stopAll(): void {
+export async function stopAll(): Promise<void> {
     for (const id of [...processes.keys()]) {
-        stopTask(id);
+        await stopTask(id);
     }
 }

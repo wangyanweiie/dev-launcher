@@ -4,10 +4,13 @@
 
 import { $, projectSearchEl } from './dom.js';
 import { loadProjects } from './api.js';
+import { bindScanRootBar, initScanRootBar } from './scan-root.js';
 import { bindCategoryTabs } from './events.js';
 import { bindServicesPanel } from './services.js';
+import { bindSidebarLogLayout } from './sidebar-layout.js';
 import { connectWs } from './websocket.js';
-import { clearLogPanel } from './log.js';
+import { bindLogPanelCollapse, clearLogPanel } from './log.js';
+import { bindThemeToggle, initTheme } from './theme.js';
 import { statuses, taskUrls, userCollapsed, userExpanded, setSearchQuery } from './state.js';
 import { refreshActiveCategoryView } from './events.js';
 import { updateCardStates } from './tasks.js';
@@ -30,23 +33,28 @@ async function stopAllTasks() {
  * 应用初始化
  */
 async function init() {
+    initTheme();
+    bindThemeToggle();
+
+    /** @type {object | null} */
+    let cfg = null;
     try {
-        const cfg = await fetch('/api/config').then((r) => r.json());
-        const scanLine = cfg.scanOk === false
-            ? `扫描: ${cfg.scanRoot}（${cfg.scanError ?? '不可用'}）`
-            : `扫描: ${cfg.scanRoot}`;
-        $('#scan-root').textContent = scanLine;
-        if (cfg.scanOk === false) {
-            $('#scan-root').classList.add('subtitle-warn');
-        }
+        cfg = await fetch('/api/config').then((r) => r.json());
+        initScanRootBar(cfg);
     } catch {
-        $('#scan-root').textContent = '扫描: /Users/lemon/Company';
+        initScanRootBar({ scanRoot: '', defaultScanRoot: '', scanOk: false });
     }
 
+    bindScanRootBar();
     bindCategoryTabs();
     bindServicesPanel();
+    bindLogPanelCollapse();
+    bindSidebarLogLayout();
     connectWs();
-    await loadProjects();
+
+    if (cfg?.scanOk) {
+        await loadProjects();
+    }
 }
 
 $('#btn-refresh')?.addEventListener('click', () => loadProjects(true));
