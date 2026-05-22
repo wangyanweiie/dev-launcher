@@ -20,7 +20,7 @@ import {
     renderActiveCategoryListHtml,
     groupHasRunning,
 } from './tabs.js';
-import { bindEvents, finishListRender } from './events.js';
+import { bindEvents, finishListRender, syncAllRowsToRunningTasks } from './events.js';
 import { resolveTaskMeta } from './project.js';
 import { importLogs, showLogForTask } from './log.js';
 import { renderRunningServices } from './services.js';
@@ -84,6 +84,7 @@ export async function loadOrphans(forceRefresh = false) {
         orphanServices.length = 0;
         orphanServices.push(...(data.orphans || []));
         syncOrphansWithProjectList();
+        updateCardStates();
         const { renderRunningServices } = await import('./services.js');
         renderRunningServices();
     } catch {
@@ -128,6 +129,7 @@ export async function loadProjects(forceRefresh = false, options = {}) {
     if (canIncremental) {
         if (loadingEl) loadingEl.style.display = 'none';
         renderCategoryTabs();
+        syncAllRowsToRunningTasks();
         updateCardStates();
         renderRunningServices();
         await loadTaskLogs();

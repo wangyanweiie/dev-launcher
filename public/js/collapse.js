@@ -3,9 +3,11 @@
  */
 
 import { listEl } from './dom.js';
+import { mapRawSubProjects } from './project.js';
 import { updateCategoryTabIndicators } from './tabs.js';
 import { statuses, userCollapsed, userExpanded } from './state.js';
 import { isCwdOrphanRunning } from './orphan-sync.js';
+import { makeTaskId } from './utils.js';
 
 /**
  * 查找项目分组 DOM
@@ -20,14 +22,21 @@ export function findProjectGroup(groupId) {
  * @param {HTMLElement} groupEl
  */
 export function groupHasRunningFromEl(groupEl) {
-    const ids = new Set();
-    let orphan = false;
-    groupEl.querySelectorAll('.script-select option[data-task-id]').forEach((opt) => {
-        if (opt.dataset.taskId) ids.add(opt.dataset.taskId);
-        if (opt.dataset.cwd && isCwdOrphanRunning(opt.dataset.cwd)) orphan = true;
-    });
-    if (orphan) return true;
-    return [...ids].some((id) => statuses[id] === 'running' || statuses[id] === 'crashed');
+    try {
+        const subProjects = mapRawSubProjects(
+            JSON.parse(groupEl.dataset.subprojects || '[]'),
+        );
+        for (const item of subProjects) {
+            if (isCwdOrphanRunning(item.sub.cwd)) return true;
+            for (const s of item.sub.scripts) {
+                const st = statuses[makeTaskId(item.sub.cwd, s.name)];
+                if (st === 'running' || st === 'crashed') return true;
+            }
+        }
+    } catch {
+        /* 忽略 */
+    }
+    return false;
 }
 
 /**

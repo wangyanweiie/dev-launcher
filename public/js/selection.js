@@ -3,8 +3,9 @@
  */
 
 import { renderScriptSelectOptions } from './render.js';
+import { getSubProjectsFromCard, mapRawSubProjects } from './project.js';
 import { statuses } from './state.js';
-import { normalizeCwd } from './utils.js';
+import { makeTaskId, normalizeCwd } from './utils.js';
 import { isCwdOrphanRunning } from './orphan-sync.js';
 
 /** @typedef {import('./types.js').SubProjectItem} SubProjectItem */
@@ -15,6 +16,43 @@ import { isCwdOrphanRunning } from './orphan-sync.js';
  * @param {HTMLOptionElement} opt
  * @param {HTMLElement} row
  */
+/**
+ * 在分组全部子项目中查找运行中/崩溃任务（不依赖当前下拉可见 option）
+ * @param {SubProjectItem[]} subProjects
+ * @returns {SelectedTask | null}
+ */
+export function findRunningTaskInSubProjects(subProjects) {
+    for (const item of subProjects) {
+        for (const s of item.sub.scripts) {
+            const tid = makeTaskId(item.sub.cwd, s.name);
+            const st = statuses[tid];
+            if (st === 'running' || st === 'crashed') {
+                const label = item.label ? `${item.label} · ${s.name}` : s.name;
+                return {
+                    cwd: item.sub.cwd,
+                    script: s.name,
+                    pm: item.sub.packageManager,
+                    taskId: tid,
+                    label,
+                };
+            }
+        }
+        if (isCwdOrphanRunning(item.sub.cwd)) {
+            const script = item.sub.scripts[0]?.name ?? 'dev';
+            const tid = makeTaskId(item.sub.cwd, script);
+            const label = item.label ? `${item.label} · ${script}` : script;
+            return {
+                cwd: item.sub.cwd,
+                script,
+                pm: item.sub.packageManager,
+                taskId: tid,
+                label,
+            };
+        }
+    }
+    return null;
+}
+
 function taskFromOption(opt, row) {
     const subSelect = row.querySelector('.subproject-select');
     const subLabel = subSelect?.options[subSelect.selectedIndex]?.textContent ?? '';
@@ -40,6 +78,37 @@ export function syncRowToRunningTask(row, subProjects) {
 
     if (row.classList.contains('instance-row--copy')) {
         return getSelectedOption(row);
+    }
+
+    const fromGroup =
+        subProjects?.length && findRunningTaskInSubProjects(subProjects);
+    if (fromGroup) {
+        const subSelect = row.querySelector('.subproject-select');
+        if (subSelect && subProjects.length) {
+            const cwd = normalizeCwd(fromGroup.cwd);
+            const item = subProjects.find(
+                (p) => normalizeCwd(p.sub.cwd) === cwd || normalizeCwd(p.key) === cwd,
+            );
+            if (item) {
+                subSelect.value = item.key;
+                fillScriptSelect(row, subProjects, item.key);
+                const refreshed = row.querySelector('.script-select');
+                if (refreshed) {
+                    for (const o of refreshed.options) {
+                        if (o.dataset.taskId === fromGroup.taskId) {
+                            refreshed.value = o.value;
+                            return taskFromOption(o, row);
+                        }
+                    }
+                }
+            }
+        }
+        for (const opt of scriptSelect.options) {
+            if (opt.dataset.taskId === fromGroup.taskId) {
+                scriptSelect.value = opt.value;
+                return taskFromOption(opt, row);
+            }
+        }
     }
 
     for (const opt of scriptSelect.options) {
@@ -106,6 +175,11 @@ export function getRowActiveTask(row) {
             return taskFromOption(opt, row);
         }
     }
+
+    const subProjects = mapRawSubProjects(getSubProjectsFromCard(row));
+    const fromGroup = findRunningTaskInSubProjects(subProjects);
+    if (fromGroup) return fromGroup;
+
     return getSelectedOption(row);
 }
 
@@ -149,5 +223,11 @@ export function fillScriptSelect(row, subProjects, subKey) {
  * @param {string} taskId
  */
 export function rowHasTask(row, taskId) {
-    return !!row.querySelector(`.script-select option[data-task-id="${CSS.escape(taskId)}"]`);
+    if (row.querySelector(`.script-select option[data-task-id="${CSS.escape(taskId)}"]`)) {
+        return true;
+    }
+    const subProjects = mapRawSubProjects(getSubProjectsFromCard(row));
+    return subProjects.some((item) =>
+        item.sub.scripts.some((s) => makeTaskId(item.sub.cwd, s.name) === taskId),
+    );
 }

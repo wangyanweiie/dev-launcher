@@ -32,13 +32,20 @@ import {
 import { makeDefaultKey } from './utils.js';
 
 /**
- * 列表渲染完成后绑定事件并刷新状态
+ * 将各行下拉对齐到分组内实际运行中的子项目/脚本
  */
-export function finishListRender() {
+export function syncAllRowsToRunningTasks() {
     listEl.querySelectorAll('.instance-row').forEach((row) => {
         const subProjects = mapRawSubProjects(getSubProjectsFromCard(row));
         syncRowToRunningTask(row, subProjects);
     });
+}
+
+/**
+ * 列表渲染完成后绑定事件并刷新状态
+ */
+export function finishListRender() {
+    syncAllRowsToRunningTasks();
     bindEvents();
     updateCardStates();
 }
