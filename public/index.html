@@ -63,10 +63,12 @@
                     placeholder="搜索项目…"
                     autocomplete="off"
                 />
-                <label id="task-profile-wrap" class="task-profile-wrap" hidden>
-                    <span class="task-profile-label">配置档</span>
-                    <select id="task-profile-select" class="task-profile-select" aria-label="启动配置档"></select>
-                </label>
+                <div id="task-profile-wrap" class="task-profile-wrap">
+                    <label class="task-profile-label" for="task-profile-select">配置档</label>
+                    <select id="task-profile-select" class="task-profile-select" aria-label="启动配置档">
+                        <option value="">默认（全局）</option>
+                    </select>
+                </div>
                 <button type="button" class="btn btn-ghost" id="btn-refresh" title="强制重新扫描当前目录">刷新列表</button>
                 <button type="button" class="btn btn-danger" id="btn-stop-all">全部停止</button>
             </div>

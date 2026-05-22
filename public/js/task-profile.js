@@ -46,26 +46,34 @@ export function renderTaskProfileSelect() {
     const select = document.getElementById('task-profile-select');
     if (!wrap || !select) return;
 
-    if (!taskProfileNames.length) {
-        wrap.hidden = true;
-        return;
-    }
-
-    wrap.hidden = false;
     const saved = localStorage.getItem(STORAGE_KEY) || '';
     const options = [
         `<option value="">默认（全局）</option>`,
         ...taskProfileNames.map((n) => {
             const selected =
                 n === saved || (!saved && n === defaultTaskProfile) ? ' selected' : '';
-            return `<option value="${escapeHtml(n)}"${selected}>${escapeHtml(n)}</option>`;
+            return `<option value="${escapeAttr(n)}"${selected}>${escapeHtml(n)}</option>`;
         }),
     ];
     select.innerHTML = options.join('');
+    select.disabled = false;
+    wrap.title = taskProfileNames.length
+        ? '启动 dev 时使用的环境配置档'
+        : '在 config.json 添加 taskProfiles 后可选用命名配置档，修改后 POST /api/settings/reload';
     if (!select.dataset.bound) {
         select.dataset.bound = '1';
         select.addEventListener('change', () => {
             localStorage.setItem(STORAGE_KEY, select.value);
         });
     }
+}
+
+/**
+ * @param {string} s
+ */
+function escapeAttr(s) {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;');
 }
