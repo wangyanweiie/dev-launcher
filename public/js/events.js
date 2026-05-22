@@ -153,6 +153,8 @@ export function bindEvents() {
             const sel = getSelectedOption(row);
             if (!sel) return;
 
+            const { getSelectedTaskProfile } = await import('./task-profile.js');
+            const profile = getSelectedTaskProfile();
             const res = await fetch('/api/tasks/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -160,6 +162,7 @@ export function bindEvents() {
                     cwd: sel.cwd,
                     scriptName: sel.script,
                     packageManager: sel.pm,
+                    ...(profile ? { profile } : {}),
                 }),
             });
 

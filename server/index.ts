@@ -19,16 +19,20 @@ import {
 } from './config.js';
 import { getCachedProjects, clearScanCache } from './scan-cache.js';
 import { initRuntime, getRuntimeConfig, reloadRuntimeConfig } from './runtime.js';
+import { resolveSpawnOptions } from './task-profiles.js';
 import { persistScanRoot } from './settings.js';
 import { detectOrphanServices, killByPort, portFromUrl } from './orphans.js';
 import { readDefaults, setProjectDefault } from './defaults.js';
 import { addInstance, readInstances, removeInstance } from './instances.js';
 import {
+    appendTaskLog,
     getAllStatuses,
     getAllTaskLogs,
+    getIdleTaskIds,
     getManagedPorts,
     getRunningTasks,
     getTaskExitCode,
+    getTaskLogs,
     setRunnerListeners,
     startTask,
     stopAll,
@@ -159,6 +163,13 @@ app.use(express.static(publicDir));
 /** 已连接的 WebSocket 客户端 */
 const clients = new Set<WebSocket>();
 
+/** WebSocket 日志订阅：仅 logSubscribeOnly 时使用 */
+interface WsMeta {
+    subscribedLogTaskId?: string;
+}
+
+const wsMeta = new WeakMap<WebSocket, WsMeta>();
+
 /**
  * 向所有 WebSocket 客户端广播消息
  * @param message - 可序列化为 JSON 的对象
@@ -170,12 +181,53 @@ function broadcast(message: object): void {
     }
 }
 
+/**
+ * 推送日志行；logSubscribeOnly 时仅发给已 subscribe 该 taskId 的客户端
+ */
+function broadcastLog(taskId: string, line: string): void {
+    const message = { type: 'log', taskId, line };
+    if (!getRuntimeConfig().logSubscribeOnly) {
+        broadcast(message);
+        return;
+    }
+    const data = JSON.stringify(message);
+    for (const ws of clients) {
+        if (ws.readyState !== ws.OPEN) continue;
+        if (wsMeta.get(ws)?.subscribedLogTaskId === taskId) {
+            ws.send(data);
+        }
+    }
+}
+
 setRunnerListeners({
-    onLog: (taskId, line) => broadcast({ type: 'log', taskId, line }),
+    onLog: broadcastLog,
     onStatus: (taskId, status, exitCode) =>
         broadcast({ type: 'status', taskId, status, exitCode: exitCode ?? undefined }),
     onUrl: (taskId, urls) => broadcast({ type: 'urls', taskId, urls }),
 });
+
+/** 空闲自动停止检查间隔（毫秒） */
+const IDLE_CHECK_MS = 30_000;
+
+/**
+ * 定期检查空闲任务并自动停止
+ */
+function startIdleAutoStopWatch(): void {
+    setInterval(async () => {
+        const config = getRuntimeConfig();
+        if (config.idleAutoStopMinutes <= 0) return;
+
+        for (const id of getIdleTaskIds()) {
+            appendTaskLog(
+                id,
+                `[dev-launcher] 空闲超过 ${config.idleAutoStopMinutes} 分钟，已自动停止`,
+            );
+            await stopTask(id);
+        }
+    }, IDLE_CHECK_MS);
+}
+
+startIdleAutoStopWatch();
 
 /**
  * 收集所有可运行任务 ID，用于批量查询状态
@@ -232,6 +284,12 @@ app.get('/api/config', (_req, res) => {
         scanError: scanCheck.ok ? undefined : scanCheck.error,
         scanRootFromEnv: !!process.env.DEV_LAUNCHER_SCAN_ROOT?.trim(),
         localHosts: getWifiIPv4Addresses(config.wifiIp),
+        taskProfileNames: Object.keys(config.taskProfiles),
+        defaultTaskProfile: config.defaultTaskProfile,
+        maxRunningTasks: config.maxRunningTasks,
+        idleAutoStopMinutes: config.idleAutoStopMinutes,
+        logSubscribeOnly: config.logSubscribeOnly,
+        forceColor: config.forceColor,
     });
 });
 
@@ -417,10 +475,11 @@ app.delete('/api/instances', (req, res) => {
 
 /** 启动指定 cwd 下的脚本 */
 app.post('/api/tasks/start', (req, res) => {
-    const { cwd, scriptName, packageManager } = req.body as {
+    const { cwd, scriptName, packageManager, profile } = req.body as {
         cwd?: string;
         scriptName?: string;
         packageManager?: 'pnpm' | 'npm' | 'yarn';
+        profile?: string;
     };
 
     if (!cwd || !scriptName || !packageManager) {
@@ -436,11 +495,31 @@ app.post('/api/tasks/start', (req, res) => {
     }
 
     const id = taskId(resolvedCwd, scriptName);
+    const config = getRuntimeConfig();
+    const explicitProfile = profile?.trim();
+    const profileName = explicitProfile || config.defaultTaskProfile || undefined;
+    if (explicitProfile && !config.taskProfiles[explicitProfile]) {
+        res.status(400).json({ error: `未知配置档: ${explicitProfile}` });
+        return;
+    }
     try {
-        const result = startTask(id, resolvedCwd, scriptName, packageManager);
+        const effectiveProfile =
+            profileName && config.taskProfiles[profileName]
+                ? profileName
+                : undefined;
+        const spawnOpts = resolveSpawnOptions(config, effectiveProfile);
+        const result = startTask(
+            id,
+            resolvedCwd,
+            scriptName,
+            packageManager,
+            spawnOpts,
+        );
         res.json({ ok: true, task: result.meta, alreadyRunning: result.alreadyRunning ?? false });
     } catch (e) {
-        res.status(500).json({ error: (e as Error).message });
+        const msg = (e as Error).message;
+        const status = msg.includes('并发上限') ? 429 : 500;
+        res.status(status).json({ error: msg });
     }
 });
 
@@ -467,8 +546,14 @@ app.post('/api/tasks/stop-all', async (_req, res) => {
     res.json({ ok: true });
 });
 
-/** 获取已缓冲的任务日志（页面刷新后恢复） */
-app.get('/api/tasks/logs', (_req, res) => {
+/** 获取已缓冲的任务日志；?taskId= 仅返回单个任务 */
+app.get('/api/tasks/logs', (req, res) => {
+    const q = req.query.taskId;
+    const one = typeof q === 'string' ? q.trim() : '';
+    if (one) {
+        res.json({ logs: { [one]: getTaskLogs(one) } });
+        return;
+    }
     res.json({ logs: getAllTaskLogs() });
 });
 
@@ -510,6 +595,37 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
     clients.add(ws);
-    ws.send(JSON.stringify({ type: 'logs-sync', logs: getAllTaskLogs() }));
-    ws.on('close', () => clients.delete(ws));
+    const cfg = getRuntimeConfig();
+    if (!cfg.logSubscribeOnly) {
+        ws.send(JSON.stringify({ type: 'logs-sync', logs: getAllTaskLogs() }));
+    } else {
+        ws.send(JSON.stringify({ type: 'logs-sync', logs: {} }));
+    }
+
+    ws.on('message', (raw) => {
+        try {
+            const msg = JSON.parse(String(raw)) as {
+                type?: string;
+                taskId?: string;
+            };
+            if (msg.type !== 'subscribe') return;
+
+            const tid =
+                typeof msg.taskId === 'string' && msg.taskId.trim()
+                    ? msg.taskId.trim()
+                    : undefined;
+            wsMeta.set(ws, { subscribedLogTaskId: tid });
+            const logs = tid ? { [tid]: getTaskLogs(tid) } : getAllTaskLogs();
+            if (ws.readyState === ws.OPEN) {
+                ws.send(JSON.stringify({ type: 'logs-sync', logs }));
+            }
+        } catch {
+            /* 忽略非法消息 */
+        }
+    });
+
+    ws.on('close', () => {
+        clients.delete(ws);
+        wsMeta.delete(ws);
+    });
 });

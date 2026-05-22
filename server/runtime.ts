@@ -17,6 +17,9 @@ export function applyRunnerFromConfig(config: ResolvedConfig): void {
         maxTaskLogLines: config.maxTaskLogLines,
         clearTaskLogsOnStop: config.clearTaskLogsOnStop,
         maxRetainedTaskStates: config.maxRetainedTaskStates,
+        maxRunningTasks: config.maxRunningTasks,
+        idleAutoStopMs: config.idleAutoStopMinutes * 60 * 1000,
+        forceColor: config.forceColor,
     });
 }
 

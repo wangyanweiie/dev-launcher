@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { LauncherConfig } from './scanner.js';
 import { readSettings } from './settings.js';
+import { parseTaskProfiles, type TaskProfile } from './task-profiles.js';
 
 /** 解析后的运行时配置 */
 export interface ResolvedConfig extends LauncherConfig {
@@ -33,6 +34,18 @@ export interface ResolvedConfig extends LauncherConfig {
     orphanDetectMinIntervalMs: number;
     /** 内存中保留的已结束任务状态条数上限（仅 stopped，crashed 与运行中保留） */
     maxRetainedTaskStates: number;
+    /** 命名启动配置档（合并到 taskEnv / nodeOptions） */
+    taskProfiles: Record<string, TaskProfile>;
+    /** 面板默认选中的配置档名，空表示仅全局默认 */
+    defaultTaskProfile: string;
+    /** 同时运行的 dev 任务上限，0 表示不限制 */
+    maxRunningTasks: number;
+    /** 无日志输出超过该分钟数则自动停止，0 表示关闭 */
+    idleAutoStopMinutes: number;
+    /** 子进程是否启用 FORCE_COLOR */
+    forceColor: boolean;
+    /** 为 true 时 WebSocket 仅向已 subscribe 的客户端推送 log */
+    logSubscribeOnly: boolean;
 }
 
 /**
@@ -60,13 +73,22 @@ export function mergeNodeOptions(
  */
 export function buildTaskSpawnEnv(
     base: NodeJS.ProcessEnv,
-    opts: { taskEnv?: Record<string, string>; nodeOptions?: string },
+    opts: {
+        taskEnv?: Record<string, string>;
+        nodeOptions?: string;
+        forceColor?: boolean;
+    },
 ): NodeJS.ProcessEnv {
     const merged = mergeNodeOptions(
         { ...base, ...(opts.taskEnv ?? {}) },
         opts.nodeOptions,
     );
-    return { ...merged, FORCE_COLOR: '1' };
+    if (opts.forceColor !== false) {
+        merged.FORCE_COLOR = '1';
+    } else {
+        delete merged.FORCE_COLOR;
+    }
+    return merged;
 }
 
 /**
@@ -95,6 +117,12 @@ export function loadConfig(root: string): ResolvedConfig {
         detectOrphanServices?: boolean;
         orphanDetectMinIntervalSeconds?: number;
         maxRetainedTaskStates?: number;
+        taskProfiles?: unknown;
+        defaultTaskProfile?: string;
+        maxRunningTasks?: number;
+        idleAutoStopMinutes?: number;
+        forceColor?: boolean;
+        logSubscribeOnly?: boolean;
     };
 
     const settings = readSettings();
@@ -112,6 +140,9 @@ export function loadConfig(root: string): ResolvedConfig {
     const maxTaskLogLines = raw.maxTaskLogLines ?? 500;
     const orphanIntervalSec = raw.orphanDetectMinIntervalSeconds ?? 0;
     const maxRetained = raw.maxRetainedTaskStates ?? 200;
+    const maxRunning = raw.maxRunningTasks ?? 0;
+    const idleMin = raw.idleAutoStopMinutes ?? 0;
+    const taskProfiles = parseTaskProfiles(raw.taskProfiles);
 
     return {
         ...raw,
@@ -144,6 +175,16 @@ export function loadConfig(root: string): ResolvedConfig {
             Number.isFinite(maxRetained) && maxRetained > 0
                 ? Math.floor(maxRetained)
                 : 200,
+        taskProfiles,
+        defaultTaskProfile: raw.defaultTaskProfile?.trim() || '',
+        maxRunningTasks:
+            Number.isFinite(maxRunning) && maxRunning >= 0
+                ? Math.floor(maxRunning)
+                : 0,
+        idleAutoStopMinutes:
+            Number.isFinite(idleMin) && idleMin >= 0 ? Math.floor(idleMin) : 0,
+        forceColor: raw.forceColor !== false,
+        logSubscribeOnly: raw.logSubscribeOnly === true,
     };
 }
 

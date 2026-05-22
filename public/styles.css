@@ -212,6 +212,28 @@ body {
     gap: 8px;
 }
 
+.task-profile-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.task-profile-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.task-profile-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--select-bg);
+    color: var(--text);
+    font-size: 13px;
+    max-width: 140px;
+}
+
 .theme-toggle {
     display: inline-flex;
     align-items: center;

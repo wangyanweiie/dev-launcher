@@ -13,6 +13,17 @@
   "detectOrphanServices": true,
   "orphanDetectMinIntervalSeconds": 30,
   "maxRetainedTaskStates": 200,
+  "maxRunningTasks": 0,
+  "idleAutoStopMinutes": 0,
+  "forceColor": true,
+  "logSubscribeOnly": false,
+  "defaultTaskProfile": "",
+  "taskProfiles": {
+    "lowMemory": {
+      "nodeOptions": "--max-old-space-size=1536",
+      "taskEnv": {}
+    }
+  },
   "ignoreDirNames": [
     "node_modules",
     ".git",

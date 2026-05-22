@@ -10,6 +10,12 @@ import { buildTaskSpawnEnv } from './config.js';
 import { killByPort, portFromUrl } from './orphans.js';
 import type { PackageManager } from './scanner.js';
 
+/** 单次启动可覆盖的 spawn 环境（配置档合并结果） */
+export interface TaskSpawnOverrides {
+    taskEnv?: Record<string, string>;
+    nodeOptions?: string;
+}
+
 /** 子进程与日志相关运行时选项（由 runtime 在启动/热重载时注入） */
 export interface RunnerOptions {
     taskEnv?: Record<string, string>;
@@ -17,6 +23,9 @@ export interface RunnerOptions {
     maxTaskLogLines?: number;
     clearTaskLogsOnStop?: boolean;
     maxRetainedTaskStates?: number;
+    maxRunningTasks?: number;
+    idleAutoStopMs?: number;
+    forceColor?: boolean;
 }
 
 /** 进程运行状态 */
@@ -187,12 +196,22 @@ let maxTaskLogLines = 500;
 /** 停止任务后是否清空日志缓冲 */
 let clearTaskLogsOnStop = false;
 
-/** 注入 dev 子进程的环境与 NODE_OPTIONS */
+/** 注入 dev 子进程的环境与 NODE_OPTIONS（无 profile 时的默认） */
 let runnerTaskEnv: Record<string, string> = {};
 let runnerNodeOptions: string | undefined;
+let runnerForceColor = true;
 
 /** 已结束 stopped 状态在内存中保留条数上限 */
 let maxRetainedTaskStates = 200;
+
+/** 同时运行任务数上限，0 不限制 */
+let maxRunningTasks = 0;
+
+/** 无日志超过该时长则自动停止，0 关闭 */
+let idleAutoStopMs = 0;
+
+/** 各任务最近一次日志时间 */
+const lastActivityAt = new Map<string, number>();
 
 /**
  * 应用启动器配置中的任务/日志选项
@@ -208,8 +227,61 @@ export function configureRunner(opts: RunnerOptions): void {
     if (opts.maxRetainedTaskStates != null && opts.maxRetainedTaskStates > 0) {
         maxRetainedTaskStates = Math.floor(opts.maxRetainedTaskStates);
     }
+    if (opts.maxRunningTasks != null && opts.maxRunningTasks >= 0) {
+        maxRunningTasks = Math.floor(opts.maxRunningTasks);
+    }
+    if (opts.idleAutoStopMs != null && opts.idleAutoStopMs >= 0) {
+        idleAutoStopMs = Math.floor(opts.idleAutoStopMs);
+    }
+    if (opts.forceColor != null) {
+        runnerForceColor = opts.forceColor;
+    }
     runnerTaskEnv = opts.taskEnv ?? {};
     runnerNodeOptions = opts.nodeOptions;
+}
+
+/**
+ * 当前运行中的任务数量
+ */
+export function countRunningTasks(): number {
+    return processes.size;
+}
+
+/**
+ * 是否还能启动新任务
+ */
+export function canStartMoreTasks(): boolean {
+    if (maxRunningTasks <= 0) return true;
+    return processes.size < maxRunningTasks;
+}
+
+/**
+ * 校验并发上限，不满足时抛出 Error
+ */
+export function assertCanStartMoreTasks(): void {
+    if (!canStartMoreTasks()) {
+        throw new Error(
+            `已达并发上限（${maxRunningTasks}），请先停止其它 dev 任务`,
+        );
+    }
+}
+
+/**
+ * 返回因空闲超时应停止的任务 ID
+ */
+export function getIdleTaskIds(): string[] {
+    if (idleAutoStopMs <= 0) return [];
+    const now = Date.now();
+    const idle: string[] = [];
+    for (const [id] of processes) {
+        const last = lastActivityAt.get(id) ?? 0;
+        if (now - last >= idleAutoStopMs) idle.push(id);
+    }
+    return idle;
+}
+
+function touchTaskActivity(taskId: string): void {
+    lastActivityAt.set(taskId, Date.now());
 }
 
 /**
@@ -251,6 +323,15 @@ const taskLogs = new Map<string, string[]>();
 let onLog: LogListener = () => {};
 
 /**
+ * 写入任务日志并广播（供 HTTP 层插入系统行）
+ * @param taskId - 任务 ID
+ * @param line - 日志行
+ */
+export function appendTaskLog(taskId: string, line: string): void {
+    recordLog(taskId, line);
+}
+
+/**
  * 写入任务日志并广播
  * @param taskId - 任务 ID
  * @param line - 日志行
@@ -265,6 +346,7 @@ function recordLog(taskId: string, line: string): void {
     if (buf.length > maxTaskLogLines) {
         buf.splice(0, buf.length - maxTaskLogLines);
     }
+    touchTaskActivity(taskId);
     onLog(taskId, line);
 }
 
@@ -274,6 +356,7 @@ function recordLog(taskId: string, line: string): void {
  */
 export function clearTaskLogs(taskId: string): void {
     taskLogs.delete(taskId);
+    lastActivityAt.delete(taskId);
 }
 
 /**
@@ -354,24 +437,30 @@ export function startTask(
     cwd: string,
     scriptName: string,
     packageManager: PackageManager,
+    spawnOverrides?: TaskSpawnOverrides,
 ): StartTaskResult {
     const existing = processes.get(taskId);
     if (existing) {
         return { meta: existing.meta, alreadyRunning: true };
     }
 
+    assertCanStartMoreTasks();
+
     lastKnownState.delete(taskId);
     clearTaskLogs(taskId);
 
     const resolvedCwd = path.resolve(cwd);
     const { cmd, args } = buildArgs(packageManager, scriptName);
+    const taskEnv = { ...runnerTaskEnv, ...(spawnOverrides?.taskEnv ?? {}) };
+    const nodeOptions = spawnOverrides?.nodeOptions ?? runnerNodeOptions;
     // macOS/Linux 使用 detached 让子进程成为独立进程组，便于 kill -PID 整树终止；勿 unref，否则无法可靠 stop
     const proc = spawn(cmd, args, {
         cwd: resolvedCwd,
         detached: process.platform !== 'win32',
         env: buildTaskSpawnEnv(process.env, {
-            taskEnv: runnerTaskEnv,
-            nodeOptions: runnerNodeOptions,
+            taskEnv,
+            nodeOptions,
+            forceColor: runnerForceColor,
         }),
         stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -387,6 +476,7 @@ export function startTask(
     };
 
     processes.set(taskId, { proc, meta });
+    touchTaskActivity(taskId);
 
     /** 将 stdout/stderr 按行推送，并尝试解析 URL */
     const pushLog = (chunk: Buffer | string) => {
@@ -405,6 +495,7 @@ export function startTask(
 
     proc.on('exit', (code, signal) => {
         processes.delete(taskId);
+        lastActivityAt.delete(taskId);
         const intentionalStop = stoppingTasks.delete(taskId);
         const crashed = !intentionalStop && code !== 0 && code !== null;
         meta.status = crashed ? 'crashed' : 'stopped';

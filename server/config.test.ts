@@ -59,4 +59,12 @@ describe('buildTaskSpawnEnv', () => {
         assert.equal(env.NODE_OPTIONS, '--x --max-old-space-size=512');
         assert.equal(env.FORCE_COLOR, '1');
     });
+
+    it('forceColor 为 false 时不设置 FORCE_COLOR', () => {
+        const env = buildTaskSpawnEnv(
+            {},
+            { taskEnv: {}, nodeOptions: undefined, forceColor: false },
+        );
+        assert.equal(env.FORCE_COLOR, undefined);
+    });
 });

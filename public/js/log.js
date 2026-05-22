@@ -82,6 +82,7 @@ export function showLogForTask(taskId, title) {
     setActiveLogTask(taskId);
     logTitle.textContent = title;
     renderLogPanel(taskId);
+    import('./websocket.js').then(({ subscribeLogTask }) => subscribeLogTask(taskId));
 }
 
 /** 清空日志 */

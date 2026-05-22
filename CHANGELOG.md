@@ -2,6 +2,20 @@
 
 本文件记录面向发行的版本变更。功能细节见 [README.md](README.md)。
 
+## [1.0.7] - 2026-05-22
+
+### Added
+
+- `taskProfiles` / 顶栏「配置档」：启动时合并命名 `taskEnv` 与 `nodeOptions`
+- `maxRunningTasks`、`idleAutoStopMinutes`：并发上限与空闲自动停止
+- `logSubscribeOnly` + WebSocket `subscribe`：按需推送任务日志
+- `GET /api/tasks/logs?taskId=`：单任务日志拉取
+- `forceColor` 配置项；列表增量刷新（结构未变时不重建 DOM）
+
+### Changed
+
+- 启动失败达并发上限时返回 HTTP 429
+
 ## [1.0.6] - 2026-05-22
 
 ### Added

@@ -28,13 +28,20 @@ import { statuses, activeLogTask } from './state.js';
 import { escapeHtml, parseTaskId } from './utils.js';
 import { syncOrphansWithProjectList } from './orphan-sync.js';
 import { orphanServices } from './state.js';
+import { updateCardStates } from './tasks.js';
+
+/** 用于判断列表结构是否未变，以便增量刷新 */
+let projectsListFingerprint = '';
 
 /**
  * 从服务端恢复任务日志并聚焦运行中任务
  */
 export async function loadTaskLogs() {
     try {
-        const res = await fetch('/api/tasks/logs');
+        const q = activeLogTask
+            ? `?taskId=${encodeURIComponent(activeLogTask)}`
+            : '';
+        const res = await fetch(`/api/tasks/logs${q}`);
         const data = await res.json();
         const logs = data.logs || {};
         if (!Object.keys(logs).length) return;
@@ -53,6 +60,16 @@ export async function loadTaskLogs() {
     } catch {
         /* 忽略 */
     }
+}
+
+/**
+ * @param {object} data - /api/projects 响应
+ */
+function projectsListFingerprintOf(data) {
+    return JSON.stringify({
+        g: (data.groups || []).map((x) => x.id),
+        s: (data.skipped || []).map((x) => x.rootPath),
+    });
 }
 
 /**
@@ -81,9 +98,9 @@ export async function loadOrphans(forceRefresh = false) {
  */
 export async function loadProjects(forceRefresh = false, options = {}) {
     const { fetchOrphans = true } = options;
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (listEl) listEl.innerHTML = '';
-    if (tabsEl) tabsEl.hidden = true;
+    const needsFullRender =
+        forceRefresh || !listEl?.querySelector('.project-group');
+    if (needsFullRender && loadingEl) loadingEl.style.display = 'block';
 
     const url = forceRefresh
         ? '/api/projects?refresh=1&includeOrphans=0'
@@ -99,9 +116,29 @@ export async function loadProjects(forceRefresh = false, options = {}) {
         return;
     }
     const data = await res.json();
+    const fp = projectsListFingerprintOf(data);
+    const canIncremental =
+        !forceRefresh &&
+        fp === projectsListFingerprint &&
+        listEl?.querySelector('.project-group');
 
     applyProjectsPayload(data);
     syncOrphansWithProjectList();
+
+    if (canIncremental) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        renderCategoryTabs();
+        updateCardStates();
+        renderRunningServices();
+        await loadTaskLogs();
+        if (fetchOrphans) await loadOrphans(forceRefresh);
+        return;
+    }
+
+    projectsListFingerprint = fp;
+
+    if (listEl) listEl.innerHTML = '';
+    if (tabsEl) tabsEl.hidden = true;
     if (loadingEl) loadingEl.style.display = 'none';
 
     if (scanError) {
