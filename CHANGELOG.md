@@ -2,6 +2,16 @@
 
 本文件记录面向发行的版本变更。功能细节见 [README.md](README.md)。
 
+## [Unreleased]
+
+### Added
+
+- Windows 启动脚本：`scripts/windows/`（`.ps1`、`.bat`）
+
+### Changed
+
+- 启动脚本按平台分目录：`scripts/macos/`、`scripts/windows/`
+
 ## [1.0.7] - 2026-05-22
 
 ### Added

@@ -2,7 +2,7 @@
 # Dev Launcher 本地启动（关闭本窗口或 Ctrl+C 即停止服务）
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 SERVER_PID=""
