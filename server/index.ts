@@ -4,7 +4,6 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { taskId, type ProjectGroup } from './scanner.js';
@@ -39,10 +38,10 @@ import {
     stopTask,
 } from './runner.js';
 import type { OrphanService } from './orphans.js';
+import { getModuleDir, getProjectRoot } from './paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-/** 项目根目录 */
-const ROOT = path.join(__dirname, '..');
+/** 项目根目录（非 dist/） */
+const ROOT = getProjectRoot(getModuleDir(import.meta.url));
 initRuntime(ROOT);
 
 /** 历史服务（lsof）检测结果缓存，配合 orphanDetectMinIntervalMs */

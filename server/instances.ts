@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getModuleDir, getProjectRoot } from './paths.js';
 import { defaultKey, deleteProjectDefault } from './defaults.js';
 
 /** 单个副本记录 */
@@ -19,9 +19,11 @@ export interface ProjectInstance {
 /** 以项目根路径 groupId 为 key 的副本列表 */
 export type InstancesMap = Record<string, ProjectInstance[]>;
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** instances.json 绝对路径 */
-const INSTANCES_FILE = path.join(__dirname, '..', 'instances.json');
+const INSTANCES_FILE = path.join(
+    getProjectRoot(getModuleDir(import.meta.url)),
+    'instances.json',
+);
 
 /**
  * 生成副本 ID

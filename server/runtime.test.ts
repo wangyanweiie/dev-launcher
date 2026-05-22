@@ -6,10 +6,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { initRuntime, reloadRuntimeConfig, getRuntimeConfig } from './runtime.js';
+import { getModuleDir, getProjectRoot } from './paths.js';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = getProjectRoot(getModuleDir(import.meta.url));
 const CONFIG = path.join(ROOT, 'config.json');
 
 describe('runtime', () => {

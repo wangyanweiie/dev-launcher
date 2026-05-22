@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getModuleDir, getProjectRoot } from './paths.js';
 
 /** 单个项目的默认启动配置 */
 export interface ProjectDefault {
@@ -28,9 +28,8 @@ export function defaultKey(groupId: string, instanceId = ''): string {
     return `${groupId}::${instanceId}`;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** defaults.json 绝对路径 */
-const DEFAULTS_FILE = path.join(__dirname, '..', 'defaults.json');
+const DEFAULTS_FILE = path.join(getProjectRoot(getModuleDir(import.meta.url)), 'defaults.json');
 
 /**
  * 获取默认配置文件路径

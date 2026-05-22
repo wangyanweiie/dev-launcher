@@ -4,7 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getModuleDir, getProjectRoot } from './paths.js';
 
 /** 用户设置 */
 export interface LauncherSettings {
@@ -12,9 +12,8 @@ export interface LauncherSettings {
     scanRoot?: string;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** dev-launcher 项目根目录 */
-const PROJECT_ROOT = path.join(__dirname, '..');
+const PROJECT_ROOT = getProjectRoot(getModuleDir(import.meta.url));
 const SETTINGS_FILE = path.join(PROJECT_ROOT, 'launcher-settings.json');
 const CONFIG_FILE = path.join(PROJECT_ROOT, 'config.json');
 
