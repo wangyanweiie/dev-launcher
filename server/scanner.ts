@@ -91,12 +91,37 @@ export function isDevScript(name: string): boolean {
 }
 
 /**
+ * @param filePath - 文件路径
+ */
+async function pathExists(filePath: string): Promise<boolean> {
+    try {
+        await fs.promises.access(filePath);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * @param dirPath - 目录路径
+ */
+async function isDirectory(dirPath: string): Promise<boolean> {
+    try {
+        const stat = await fs.promises.stat(dirPath);
+        return stat.isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+/**
  * 安全读取 JSON 文件
  * @param filePath - 文件路径
  */
-function readJsonSafe(filePath: string): Record<string, unknown> | null {
+async function readJsonSafe(filePath: string): Promise<Record<string, unknown> | null> {
     try {
-        return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, unknown>;
+        const raw = await fs.promises.readFile(filePath, 'utf8');
+        return JSON.parse(raw) as Record<string, unknown>;
     } catch {
         return null;
     }
@@ -114,7 +139,6 @@ function shouldIgnorePath(
     ignorePathSegments: string[],
 ): boolean {
     const parts = filePath.split(path.sep);
-    // 路径任意段命中忽略目录名则跳过
     if (parts.some((p) => ignoreDirNames.includes(p))) return true;
     const normalized = filePath.replace(/\\/g, '/');
     return ignorePathSegments.some((seg) => normalized.includes(seg));
@@ -125,8 +149,8 @@ function shouldIgnorePath(
  * @param cwd - 项目工作目录
  */
 export async function detectPackageManager(cwd: string): Promise<PackageManager> {
-    if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
-    if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn';
+    if (await pathExists(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+    if (await pathExists(path.join(cwd, 'yarn.lock'))) return 'yarn';
     return 'npm';
 }
 
@@ -136,19 +160,18 @@ export async function detectPackageManager(cwd: string): Promise<PackageManager>
  * @param ignoreDirNames - 忽略目录名
  * @param ignorePathSegments - 忽略路径片段
  */
-function parsePackageJson(
+async function parsePackageJson(
     pkgPath: string,
     ignoreDirNames: string[],
     ignorePathSegments: string[],
-): SubProject | null {
+): Promise<SubProject | null> {
     if (shouldIgnorePath(pkgPath, ignoreDirNames, ignorePathSegments)) return null;
 
     const cwd = path.resolve(path.dirname(pkgPath));
-    const pkg = readJsonSafe(pkgPath);
+    const pkg = await readJsonSafe(pkgPath);
     if (!pkg) return null;
 
     const scripts = (pkg.scripts as Record<string, string> | undefined) ?? {};
-    // 仅保留 dev/serve 类脚本并排序
     const devScripts: DevScript[] = Object.entries(scripts)
         .filter(([name]) => isDevScript(name))
         .map(([name, command]) => ({ name, command }))
@@ -157,9 +180,9 @@ function parsePackageJson(
     if (devScripts.length === 0) return null;
 
     const packageName = (pkg.name as string) || path.basename(cwd);
-    const pm = fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))
+    const pm = (await pathExists(path.join(cwd, 'pnpm-lock.yaml')))
         ? 'pnpm'
-        : fs.existsSync(path.join(cwd, 'yarn.lock'))
+        : (await pathExists(path.join(cwd, 'yarn.lock')))
           ? 'yarn'
           : 'npm';
 
@@ -177,33 +200,33 @@ function parsePackageJson(
  * 是否存在 apps 目录（monorepo 子项目容器）
  * @param rootPath - 项目根路径
  */
-function hasAppsDirectory(rootPath: string): boolean {
+async function hasAppsDirectory(rootPath: string): Promise<boolean> {
     const appsPath = path.join(rootPath, 'apps');
-    try {
-        return fs.existsSync(appsPath) && fs.statSync(appsPath).isDirectory();
-    } catch {
-        return false;
-    }
+    return isDirectory(appsPath);
 }
 
 /**
- * 仅扫描 apps/* 下一层子目录的 package.json（不递归更深，不扫描 blog 等其它目录）
+ * 仅扫描 apps/* 下一层子目录的 package.json
  * @param rootPath - 项目根路径
  * @param config - 启动器配置
  */
-function findAppsSubProjects(rootPath: string, config: LauncherConfig): SubProject[] {
+async function findAppsSubProjects(
+    rootPath: string,
+    config: LauncherConfig,
+): Promise<SubProject[]> {
     const appsPath = path.join(rootPath, 'apps');
-    if (!fs.existsSync(appsPath)) return [];
+    if (!(await pathExists(appsPath))) return [];
 
     const found: SubProject[] = [];
+    const entries = await fs.promises.readdir(appsPath, { withFileTypes: true });
 
-    for (const entry of fs.readdirSync(appsPath, { withFileTypes: true })) {
+    for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
         const pkgPath = path.join(appsPath, entry.name, 'package.json');
-        if (!fs.existsSync(pkgPath)) continue;
+        if (!(await pathExists(pkgPath))) continue;
 
-        const project = parsePackageJson(
+        const project = await parsePackageJson(
             pkgPath,
             config.ignoreDirNames,
             config.ignorePathSegments,
@@ -216,29 +239,24 @@ function findAppsSubProjects(rootPath: string, config: LauncherConfig): SubProje
 
 /**
  * 扫描单个项目文件夹，组装 ProjectGroup
- *
- * 规则：
- * - 默认只解析项目根目录 package.json（如 nandateqi_pc 仅一个 dev）
- * - 若根目录存在 apps/，则改为扫描 apps/* 下各子项的 package.json（如 x-mart、xmart-web）
  * @param rootPath - 项目根路径
  * @param category - 分类名 App/Pc
  * @param config - 启动器配置
  */
-function scanProjectFolder(
+async function scanProjectFolder(
     rootPath: string,
     category: string,
     config: LauncherConfig,
-): ProjectGroup | null {
+): Promise<ProjectGroup | null> {
     const folderName = path.basename(rootPath);
     const rootPkg = path.join(rootPath, 'package.json');
 
-    const rootProject = fs.existsSync(rootPkg)
-        ? parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
+    const rootProject = (await pathExists(rootPkg))
+        ? await parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
         : null;
 
-    // 有 apps 目录时走 monorepo 模式，不再把根 package.json 与 blog 等其它子目录算进来
-    if (hasAppsDirectory(rootPath)) {
-        const children = findAppsSubProjects(rootPath, config);
+    if (await hasAppsDirectory(rootPath)) {
+        const children = await findAppsSubProjects(rootPath, config);
         if (children.length > 0) {
             return {
                 id: rootPath,
@@ -249,7 +267,6 @@ function scanProjectFolder(
                 hasChildren: true,
             };
         }
-        // apps 存在但无有效子包时，回退到根目录单项目
     }
 
     if (!rootProject) return null;
@@ -270,19 +287,19 @@ function scanProjectFolder(
  * @param rootPath - 项目根路径
  * @param config - 启动器配置
  */
-function describeSkipReason(rootPath: string, config: LauncherConfig): string {
+async function describeSkipReason(rootPath: string, config: LauncherConfig): Promise<string> {
     const rootPkg = path.join(rootPath, 'package.json');
-    const hasPkg = fs.existsSync(rootPkg);
-    const hasApps = hasAppsDirectory(rootPath);
+    const hasPkg = await pathExists(rootPkg);
+    const hasApps = await hasAppsDirectory(rootPath);
 
     if (!hasPkg && !hasApps) {
         return '缺少 package.json，且不存在 apps/ 目录';
     }
 
     if (hasApps) {
-        const children = findAppsSubProjects(rootPath, config);
+        const children = await findAppsSubProjects(rootPath, config);
         const rootProject = hasPkg
-            ? parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
+            ? await parsePackageJson(rootPkg, config.ignoreDirNames, config.ignorePathSegments)
             : null;
         if (children.length === 0 && !rootProject) {
             return '存在 apps/，但子项目与根 package.json 均无 dev/serve 脚本';
@@ -290,7 +307,7 @@ function describeSkipReason(rootPath: string, config: LauncherConfig): string {
     }
 
     if (hasPkg) {
-        const pkg = readJsonSafe(rootPkg);
+        const pkg = await readJsonSafe(rootPkg);
         const scriptNames = Object.keys((pkg?.scripts as Record<string, string>) ?? {});
         if (scriptNames.length === 0) {
             return 'package.json 的 scripts 为空，请添加 dev、dev:h5 或 serve 等脚本';
@@ -304,34 +321,35 @@ function describeSkipReason(rootPath: string, config: LauncherConfig): string {
 }
 
 /**
- * 扫描配置目录下所有项目
+ * 扫描配置目录下所有项目（异步，避免阻塞事件循环）
  * @param config - 启动器配置
  */
-export function scanProjects(config: LauncherConfig): ScanResult {
+export async function scanProjects(config: LauncherConfig): Promise<ScanResult> {
     const groups: ProjectGroup[] = [];
     const skipped: SkippedProject[] = [];
 
     for (const category of config.categories) {
         const catPath = path.join(config.scanRoot, category);
-        if (!fs.existsSync(catPath)) continue;
+        if (!(await pathExists(catPath)) || !(await isDirectory(catPath))) continue;
 
-        for (const entry of fs.readdirSync(catPath, { withFileTypes: true })) {
+        const entries = await fs.promises.readdir(catPath, { withFileTypes: true });
+        for (const entry of entries) {
             if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
 
             const projectPath = path.join(catPath, entry.name);
-            const group = scanProjectFolder(projectPath, category, config);
+            const group = await scanProjectFolder(projectPath, category, config);
             if (group) {
                 groups.push(group);
                 continue;
             }
 
             const rootPkg = path.join(projectPath, 'package.json');
-            if (fs.existsSync(rootPkg) || hasAppsDirectory(projectPath)) {
+            if ((await pathExists(rootPkg)) || (await hasAppsDirectory(projectPath))) {
                 skipped.push({
                     folderName: entry.name,
                     category,
                     rootPath: projectPath,
-                    reason: describeSkipReason(projectPath, config),
+                    reason: await describeSkipReason(projectPath, config),
                 });
             }
         }

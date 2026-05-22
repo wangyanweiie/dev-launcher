@@ -78,7 +78,11 @@ HOST="$(node -e "console.log(JSON.parse(require('fs').readFileSync('config.json'
 echo "启动中… 面板地址: http://${HOST}:${PORT}"
 echo ""
 
-# 前台启动；关闭终端时 trap 会结束进程树
+# 前台启动（prestart 会编译 dist）；关闭终端时 trap 会结束进程树
+if [[ ! -f dist/server/index.js ]]; then
+    echo "编译服务端…"
+    pnpm run build
+fi
 pnpm start &
 SERVER_PID=$!
 wait "$SERVER_PID"

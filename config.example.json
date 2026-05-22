@@ -6,6 +6,13 @@
   "openBrowser": true,
   "scanCacheSeconds": 30,
   "wifiIp": "",
+  "nodeOptions": "--max-old-space-size=2048",
+  "taskEnv": {},
+  "maxTaskLogLines": 200,
+  "clearTaskLogsOnStop": true,
+  "detectOrphanServices": true,
+  "orphanDetectMinIntervalSeconds": 30,
+  "maxRetainedTaskStates": 200,
   "ignoreDirNames": [
     "node_modules",
     ".git",

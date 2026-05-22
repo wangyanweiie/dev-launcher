@@ -19,6 +19,54 @@ export interface ResolvedConfig extends LauncherConfig {
     scanCacheMs: number;
     /** 可选：指定无线网 IPv4，不填则自动检测 Wi-Fi 网卡 */
     wifiIp?: string;
+    /** 注入 dev 子进程的额外环境变量 */
+    taskEnv: Record<string, string>;
+    /** 合并进子进程 NODE_OPTIONS（如 --max-old-space-size=2048） */
+    nodeOptions?: string;
+    /** 每个任务保留的日志行数上限 */
+    maxTaskLogLines: number;
+    /** 停止任务后是否清空该任务日志缓冲 */
+    clearTaskLogsOnStop: boolean;
+    /** 是否在 /api/projects 中检测历史服务（lsof） */
+    detectOrphanServices: boolean;
+    /** 历史服务检测最小间隔（毫秒），0 表示每次请求都检测 */
+    orphanDetectMinIntervalMs: number;
+    /** 内存中保留的已结束任务状态条数上限（仅 stopped，crashed 与运行中保留） */
+    maxRetainedTaskStates: number;
+}
+
+/**
+ * 合并 NODE_OPTIONS：config 中的 nodeOptions 追加在已有值之后
+ * @param base - 基础环境（通常含 process.env）
+ * @param nodeOptions - config.json 中的 nodeOptions
+ */
+export function mergeNodeOptions(
+    base: NodeJS.ProcessEnv,
+    nodeOptions?: string,
+): NodeJS.ProcessEnv {
+    const extra = nodeOptions?.trim();
+    if (!extra) return { ...base };
+
+    const env = { ...base };
+    const existing = env.NODE_OPTIONS?.trim();
+    env.NODE_OPTIONS = existing ? `${existing} ${extra}` : extra;
+    return env;
+}
+
+/**
+ * 构建 dev 子进程 spawn 环境变量
+ * @param base - 通常为 process.env
+ * @param opts - taskEnv、nodeOptions
+ */
+export function buildTaskSpawnEnv(
+    base: NodeJS.ProcessEnv,
+    opts: { taskEnv?: Record<string, string>; nodeOptions?: string },
+): NodeJS.ProcessEnv {
+    const merged = mergeNodeOptions(
+        { ...base, ...(opts.taskEnv ?? {}) },
+        opts.nodeOptions,
+    );
+    return { ...merged, FORCE_COLOR: '1' };
 }
 
 /**
@@ -40,6 +88,13 @@ export function loadConfig(root: string): ResolvedConfig {
         openBrowser?: boolean;
         scanCacheSeconds?: number;
         wifiIp?: string;
+        taskEnv?: Record<string, string>;
+        nodeOptions?: string;
+        maxTaskLogLines?: number;
+        clearTaskLogsOnStop?: boolean;
+        detectOrphanServices?: boolean;
+        orphanDetectMinIntervalSeconds?: number;
+        maxRetainedTaskStates?: number;
     };
 
     const settings = readSettings();
@@ -54,6 +109,10 @@ export function loadConfig(root: string): ResolvedConfig {
         ? Number(process.env.DEV_LAUNCHER_PORT)
         : raw.port;
 
+    const maxTaskLogLines = raw.maxTaskLogLines ?? 500;
+    const orphanIntervalSec = raw.orphanDetectMinIntervalSeconds ?? 0;
+    const maxRetained = raw.maxRetainedTaskStates ?? 200;
+
     return {
         ...raw,
         scanRoot,
@@ -62,6 +121,29 @@ export function loadConfig(root: string): ResolvedConfig {
         openBrowser: raw.openBrowser !== false,
         scanCacheMs: (raw.scanCacheSeconds ?? 30) * 1000,
         wifiIp: raw.wifiIp?.trim() || undefined,
+        taskEnv:
+            raw.taskEnv && typeof raw.taskEnv === 'object' && !Array.isArray(raw.taskEnv)
+                ? Object.fromEntries(
+                      Object.entries(raw.taskEnv).filter(
+                          ([, v]) => typeof v === 'string',
+                      ),
+                  )
+                : {},
+        nodeOptions: raw.nodeOptions?.trim() || undefined,
+        maxTaskLogLines:
+            Number.isFinite(maxTaskLogLines) && maxTaskLogLines > 0
+                ? Math.floor(maxTaskLogLines)
+                : 500,
+        clearTaskLogsOnStop: raw.clearTaskLogsOnStop === true,
+        detectOrphanServices: raw.detectOrphanServices !== false,
+        orphanDetectMinIntervalMs:
+            Number.isFinite(orphanIntervalSec) && orphanIntervalSec >= 0
+                ? Math.floor(orphanIntervalSec) * 1000
+                : 0,
+        maxRetainedTaskStates:
+            Number.isFinite(maxRetained) && maxRetained > 0
+                ? Math.floor(maxRetained)
+                : 200,
     };
 }
 

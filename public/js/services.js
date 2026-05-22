@@ -96,7 +96,11 @@ export function toggleServicesSection(section) {
     if (section === 'managed') {
         servicesSectionCollapsed.managed = !servicesSectionCollapsed.managed;
     } else if (section === 'history') {
+        const wasCollapsed = servicesSectionCollapsed.history;
         servicesSectionCollapsed.history = !servicesSectionCollapsed.history;
+        if (wasCollapsed && !servicesSectionCollapsed.history) {
+            import('./api.js').then(({ loadOrphans }) => loadOrphans());
+        }
     }
     syncServicesSidebarLayout();
 }
@@ -356,8 +360,9 @@ async function killOrphan(port) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) return;
-    const { loadProjects } = await import('./api.js');
-    await loadProjects(true);
+    const { loadProjects, loadOrphans } = await import('./api.js');
+    await loadProjects(true, { fetchOrphans: false });
+    await loadOrphans(true);
 }
 
 /**
@@ -402,8 +407,9 @@ export function bindServicesPanel() {
             if (cwd) {
                 const { killOrphansForCwd } = await import('./orphan-sync.js');
                 await killOrphansForCwd(cwd);
-                const { loadProjects } = await import('./api.js');
-                await loadProjects(true);
+                const { loadProjects, loadOrphans } = await import('./api.js');
+                await loadProjects(true, { fetchOrphans: false });
+                await loadOrphans(true);
             }
             return;
         }

@@ -27,6 +27,7 @@ import { renderRunningServices } from './services.js';
 import { statuses, activeLogTask } from './state.js';
 import { escapeHtml, parseTaskId } from './utils.js';
 import { syncOrphansWithProjectList } from './orphan-sync.js';
+import { orphanServices } from './state.js';
 
 /**
  * 从服务端恢复任务日志并聚焦运行中任务
@@ -55,15 +56,38 @@ export async function loadTaskLogs() {
 }
 
 /**
+ * 按需加载历史服务（lsof），与项目列表分离以减轻 /api/projects
+ * @param {boolean} [forceRefresh] - 是否绕过 orphans 检测缓存
+ */
+export async function loadOrphans(forceRefresh = false) {
+    const url = forceRefresh ? '/api/orphans?refresh=1' : '/api/orphans';
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        orphanServices.length = 0;
+        orphanServices.push(...(data.orphans || []));
+        syncOrphansWithProjectList();
+        const { renderRunningServices } = await import('./services.js');
+        renderRunningServices();
+    } catch {
+        /* 忽略 */
+    }
+}
+
+/**
  * 从 API 加载并渲染项目
  * @param {boolean} [forceRefresh] - 是否绕过扫描缓存
+ * @param {{ fetchOrphans?: boolean }} [options] - fetchOrphans 默认 true，拉取历史服务
  */
-export async function loadProjects(forceRefresh = false) {
+export async function loadProjects(forceRefresh = false, options = {}) {
+    const { fetchOrphans = true } = options;
     if (loadingEl) loadingEl.style.display = 'block';
     if (listEl) listEl.innerHTML = '';
     if (tabsEl) tabsEl.hidden = true;
 
-    const url = forceRefresh ? '/api/projects?refresh=1' : '/api/projects';
+    const url = forceRefresh
+        ? '/api/projects?refresh=1&includeOrphans=0'
+        : '/api/projects?includeOrphans=0';
     let res;
     try {
         res = await fetch(url);
@@ -127,4 +151,7 @@ export async function loadProjects(forceRefresh = false) {
     renderActiveCategoryListHtml();
     finishListRender();
     await loadTaskLogs();
+    if (fetchOrphans) {
+        await loadOrphans(forceRefresh);
+    }
 }

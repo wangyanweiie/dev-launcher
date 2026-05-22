@@ -2,6 +2,21 @@
 
 本文件记录面向发行的版本变更。功能细节见 [README.md](README.md)。
 
+## [1.0.6] - 2026-05-22
+
+### Added
+
+- `POST /api/settings/reload`：热重载 `config.json` 到 runner（`port`/`host` 仍需重启）
+- `GET /api/orphans`：历史服务按需拉取；`/api/projects` 默认不再执行 `lsof`
+- `maxRetainedTaskStates`：限制已停止任务状态在内存中的保留数量
+- `pnpm build` + `pnpm start` 使用编译后的 `dist/`（`pnpm start:tsx` 保留原 tsx 方式）
+
+### Changed
+
+- 项目扫描改为异步 `fs.promises`，减轻大目录扫描时的事件循环阻塞
+- 停止任务后自动 `pruneRunnerState`；`/api/tasks/logs` 仅返回运行中/崩溃任务的日志
+- 面板默认 `loadProjects` + `loadOrphans` 分请求；展开「历史服务」时亦可单独刷新 orphans
+
 ## [1.0.5] - 2026-05-21
 
 ### Added

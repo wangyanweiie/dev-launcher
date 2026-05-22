@@ -16,10 +16,13 @@
         "node": ">=20"
     },
     "scripts": {
+        "build": "tsc",
         "dev": "tsx watch server/index.ts",
-        "start": "tsx server/index.ts",
+        "start": "node dist/server/index.js",
+        "start:tsx": "tsx server/index.ts",
+        "prestart": "pnpm run build",
         "typecheck": "tsc --noEmit",
-        "test": "tsx --test server/config.test.ts"
+        "test": "tsx --test server/*.test.ts"
     },
     "dependencies": {
         "express": "^4.21.2",

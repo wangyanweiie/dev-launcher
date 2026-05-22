@@ -7,22 +7,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
-import {
-    scanProjects,
-    taskId,
-    type ProjectGroup,
-} from './scanner.js';
+import { taskId, type ProjectGroup } from './scanner.js';
 import {
     applyScanRoot,
     getDefaultScanRoot,
     getWifiIPv4Addresses,
-    loadConfig,
     openBrowser,
     resolveEffectiveScanRoot,
     validateScanRoot,
     isCwdUnderScanRoot,
 } from './config.js';
 import { getCachedProjects, clearScanCache } from './scan-cache.js';
+import { initRuntime, getRuntimeConfig, reloadRuntimeConfig } from './runtime.js';
 import { persistScanRoot } from './settings.js';
 import { detectOrphanServices, killByPort, portFromUrl } from './orphans.js';
 import { readDefaults, setProjectDefault } from './defaults.js';
@@ -38,12 +34,120 @@ import {
     stopAll,
     stopTask,
 } from './runner.js';
+import type { OrphanService } from './orphans.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** 项目根目录 */
 const ROOT = path.join(__dirname, '..');
-/** 启动器运行时配置 */
-const config = loadConfig(ROOT);
+initRuntime(ROOT);
+
+/** 历史服务（lsof）检测结果缓存，配合 orphanDetectMinIntervalMs */
+let orphanDetectCache: { at: number; orphans: OrphanService[] } | null = null;
+
+/**
+ * 获取历史服务列表（可关闭检测或按间隔节流）
+ */
+async function resolveCompanyOrphans(
+    groups: ProjectGroup[],
+    managedPorts: Set<number>,
+): Promise<OrphanService[]> {
+    const config = getRuntimeConfig();
+    if (!config.detectOrphanServices) {
+        return [];
+    }
+
+    const minInterval = config.orphanDetectMinIntervalMs;
+    const now = Date.now();
+    if (
+        minInterval > 0 &&
+        orphanDetectCache &&
+        now - orphanDetectCache.at < minInterval
+    ) {
+        return orphanDetectCache.orphans;
+    }
+
+    const { companyOrphans } = await detectOrphanServices(
+        config.scanRoot,
+        config.port,
+        groups,
+        managedPorts,
+    );
+    orphanDetectCache = { at: now, orphans: companyOrphans };
+    return companyOrphans;
+}
+
+/**
+ * 组装项目列表 API 的公共字段（不含 orphans）
+ */
+async function buildProjectsCore(force: boolean) {
+    const config = getRuntimeConfig();
+    syncConfigScanRoot();
+    const scanCheck = validateScanRoot(config.scanRoot);
+
+    let groups: ProjectGroup[] = [];
+    let skipped: import('./scanner.js').SkippedProject[] = [];
+    let scanError: string | undefined;
+    let cachedAt: number | undefined;
+    let fromCache = false;
+
+    if (scanCheck.ok) {
+        const result = await getCachedProjects(config, force);
+        groups = result.groups;
+        skipped = result.skipped;
+        cachedAt = result.cachedAt;
+        fromCache = result.fromCache;
+    } else {
+        scanError = scanCheck.error;
+    }
+
+    const allIds = collectTaskIds(groups);
+    const statuses = getAllStatuses(allIds);
+    const running = getRunningTasks();
+
+    for (const t of running) {
+        statuses[t.taskId] = 'running';
+    }
+
+    const exitCodes: Record<string, number> = {};
+    for (const id of [...allIds, ...running.map((t) => t.taskId)]) {
+        if (statuses[id] === 'crashed') {
+            const code = getTaskExitCode(id);
+            if (code !== undefined && code !== null) exitCodes[id] = code;
+        }
+    }
+
+    const urls: Record<string, string[]> = Object.fromEntries(
+        running.filter((t) => t.urls?.length).map((t) => [t.taskId, t.urls!]),
+    );
+
+    const managedPorts = getManagedPorts();
+    for (const t of running) {
+        for (const u of t.urls ?? []) {
+            const p = portFromUrl(u);
+            if (p) managedPorts.add(p);
+        }
+    }
+
+    return {
+        config,
+        scanCheck,
+        groups,
+        skipped,
+        scanError,
+        cachedAt,
+        fromCache,
+        statuses,
+        running,
+        exitCodes,
+        urls,
+        managedPorts,
+    };
+}
+
+/** 清空历史服务缓存（停止外部进程后列表需更新） */
+function invalidateOrphanDetectCache(): void {
+    orphanDetectCache = null;
+}
 
 const app = express();
 app.use(express.json());
@@ -92,6 +196,7 @@ function collectTaskIds(groups: ProjectGroup[]): string[] {
 
 /** 同步内存中的扫描路径（从已保存配置读取） */
 function syncConfigScanRoot(): string {
+    const config = getRuntimeConfig();
     const scanRoot = resolveEffectiveScanRoot(config);
     applyScanRoot(config, scanRoot);
     return scanRoot;
@@ -115,6 +220,7 @@ function assertTaskCwdAllowed(
 
 /** 返回扫描根目录与服务端口 */
 app.get('/api/config', (_req, res) => {
+    const config = getRuntimeConfig();
     const scanRoot = syncConfigScanRoot();
     const scanCheck = validateScanRoot(scanRoot);
     res.json({
@@ -151,7 +257,7 @@ app.post('/api/settings/scan-root/save', (req, res) => {
         res.status(500).json({ error: (e as Error).message });
         return;
     }
-    applyScanRoot(config, resolved);
+    applyScanRoot(getRuntimeConfig(), resolved);
 
     res.json({
         ok: true,
@@ -176,90 +282,76 @@ app.post('/api/settings/scan', (req, res) => {
         return;
     }
 
-    applyScanRoot(config, resolved);
+    applyScanRoot(getRuntimeConfig(), resolved);
     clearScanCache();
+    invalidateOrphanDetectCache();
 
     res.json({
         ok: true,
-        scanRoot: config.scanRoot,
+        scanRoot: getRuntimeConfig().scanRoot,
         scanOk: true,
     });
 });
 
-/** 扫描项目列表，附带运行状态、URL、默认配置、外部监听 */
+/** 从磁盘重新加载 config.json（任务 env、日志上限等立即生效；port/host 需重启） */
+app.post('/api/settings/reload', (_req, res) => {
+    try {
+        const next = reloadRuntimeConfig(ROOT);
+        invalidateOrphanDetectCache();
+        clearScanCache();
+        res.json({
+            ok: true,
+            message: '已重新加载 config.json',
+            port: next.port,
+            host: next.host,
+        });
+    } catch (e) {
+        res.status(500).json({ error: (e as Error).message });
+    }
+});
+
+/** 扫描项目列表；默认不含 orphans，传 includeOrphans=1 与旧版行为一致 */
 app.get('/api/projects', async (req, res) => {
-    syncConfigScanRoot();
-    const scanCheck = validateScanRoot(config.scanRoot);
     const force = req.query.refresh === '1';
+    if (force) invalidateOrphanDetectCache();
 
-    let groups: ProjectGroup[] = [];
-    let skipped: import('./scanner.js').SkippedProject[] = [];
-    let scanError: string | undefined;
-    let cachedAt: number | undefined;
-    let fromCache = false;
+    const includeOrphans = req.query.includeOrphans === '1';
+    const core = await buildProjectsCore(force);
 
-    if (scanCheck.ok) {
-        const result = getCachedProjects(config, force);
-        groups = result.groups;
-        skipped = result.skipped;
-        cachedAt = result.cachedAt;
-        fromCache = result.fromCache;
-    } else {
-        scanError = scanCheck.error;
+    let orphans: OrphanService[] = [];
+    if (includeOrphans && core.scanCheck.ok) {
+        orphans = await resolveCompanyOrphans(core.groups, core.managedPorts);
     }
-
-    const allIds = collectTaskIds(groups);
-    const statuses = getAllStatuses(allIds);
-    const running = getRunningTasks();
-
-    // 合并内存中正在运行的任务（避免 taskId 与扫描列表略有不一致时丢失状态）
-    for (const t of running) {
-        statuses[t.taskId] = 'running';
-    }
-
-    const exitCodes: Record<string, number> = {};
-    for (const id of [...allIds, ...running.map((t) => t.taskId)]) {
-        if (statuses[id] === 'crashed') {
-            const code = getTaskExitCode(id);
-            if (code !== undefined && code !== null) exitCodes[id] = code;
-        }
-    }
-
-    const urls: Record<string, string[]> = Object.fromEntries(
-        running.filter((t) => t.urls?.length).map((t) => [t.taskId, t.urls!]),
-    );
-    const defaults = readDefaults();
-    const instances = readInstances();
-
-    const managedPorts = getManagedPorts();
-    for (const t of running) {
-        for (const u of t.urls ?? []) {
-            const p = portFromUrl(u);
-            if (p) managedPorts.add(p);
-        }
-    }
-
-    const { companyOrphans } = await detectOrphanServices(
-        config.scanRoot,
-        config.port,
-        groups,
-        managedPorts,
-    );
 
     res.json({
-        groups,
-        skipped,
-        statuses,
-        running,
-        urls,
-        defaults,
-        instances,
-        scanError,
-        cachedAt,
-        fromCache,
-        orphans: companyOrphans,
-        exitCodes,
+        groups: core.groups,
+        skipped: core.skipped,
+        statuses: core.statuses,
+        running: core.running,
+        urls: core.urls,
+        defaults: readDefaults(),
+        instances: readInstances(),
+        scanError: core.scanError,
+        cachedAt: core.cachedAt,
+        fromCache: core.fromCache,
+        orphans,
+        exitCodes: core.exitCodes,
     });
+});
+
+/** 历史服务（lsof），按需拉取，减轻 /api/projects 负担 */
+app.get('/api/orphans', async (req, res) => {
+    const force = req.query.refresh === '1';
+    if (force) invalidateOrphanDetectCache();
+
+    const core = await buildProjectsCore(false);
+    if (!core.scanCheck.ok) {
+        res.json({ orphans: [], scanError: core.scanError });
+        return;
+    }
+
+    const orphans = await resolveCompanyOrphans(core.groups, core.managedPorts);
+    res.json({ orphans, cachedAt: core.cachedAt });
 });
 
 /** 读取全部默认配置 */
@@ -383,29 +475,31 @@ app.get('/api/tasks/logs', (_req, res) => {
 /** 结束占用端口的外部进程（孤儿服务） */
 app.post('/api/orphans/kill', async (req, res) => {
     const { port } = req.body as { port?: number };
-    if (!port || port === config.port) {
+    if (!port || port === getRuntimeConfig().port) {
         res.status(400).json({ error: '无效端口' });
         return;
     }
     const ok = await killByPort(port);
+    if (ok) invalidateOrphanDetectCache();
     res.json({ ok });
 });
 
 /** HTTP 服务，仅监听本机 */
-const panelUrl = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-const server = app.listen(config.port, config.host, () => {
+const listenConfig = getRuntimeConfig();
+const panelUrl = `http://${listenConfig.host === '0.0.0.0' ? 'localhost' : listenConfig.host}:${listenConfig.port}`;
+const server = app.listen(listenConfig.port, listenConfig.host, () => {
     console.log(`\n  Dev Launcher  →  ${panelUrl}`);
-    console.log(`  扫描目录      →  ${config.scanRoot}\n`);
-    if (config.openBrowser) {
+    console.log(`  扫描目录      →  ${listenConfig.scanRoot}\n`);
+    if (listenConfig.openBrowser) {
         openBrowser(panelUrl);
     }
 });
 
 server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-        console.error(`\n  端口 ${config.port} 已被占用。请先停止旧实例：`);
-        console.error(`  lsof -i :${config.port}`);
-        console.error(`  kill -9 $(lsof -ti :${config.port})\n`);
+        console.error(`\n  端口 ${listenConfig.port} 已被占用。请先停止旧实例：`);
+        console.error(`  lsof -i :${listenConfig.port}`);
+        console.error(`  kill -9 $(lsof -ti :${listenConfig.port})\n`);
         process.exit(1);
     }
     throw err;

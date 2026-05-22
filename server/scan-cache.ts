@@ -19,15 +19,15 @@ let cache: ScanCacheEntry | null = null;
  * @param config - 启动器配置
  * @param force - 是否强制重新扫描
  */
-export function getCachedProjects(
+export async function getCachedProjects(
     config: ResolvedConfig,
     force = false,
-): {
+): Promise<{
     groups: ProjectGroup[];
     skipped: SkippedProject[];
     cachedAt: number;
     fromCache: boolean;
-} {
+}> {
     const ttl = config.scanCacheMs;
     const now = Date.now();
 
@@ -40,7 +40,7 @@ export function getCachedProjects(
         };
     }
 
-    const { groups, skipped } = scanProjects(config);
+    const { groups, skipped } = await scanProjects(config);
     cache = { groups, skipped, cachedAt: now };
     return { groups, skipped, cachedAt: now, fromCache: false };
 }
@@ -48,4 +48,9 @@ export function getCachedProjects(
 /** 清空缓存（配置变更时可调用） */
 export function clearScanCache(): void {
     cache = null;
+}
+
+/** 读取缓存中的 groups（无缓存时返回空数组） */
+export function getCachedGroupsOnly(): ProjectGroup[] {
+    return cache?.groups ?? [];
 }

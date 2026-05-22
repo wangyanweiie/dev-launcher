@@ -6,8 +6,18 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { exec } from 'node:child_process';
 import path from 'node:path';
+import { buildTaskSpawnEnv } from './config.js';
 import { killByPort, portFromUrl } from './orphans.js';
 import type { PackageManager } from './scanner.js';
+
+/** 子进程与日志相关运行时选项（由 runtime 在启动/热重载时注入） */
+export interface RunnerOptions {
+    taskEnv?: Record<string, string>;
+    nodeOptions?: string;
+    maxTaskLogLines?: number;
+    clearTaskLogsOnStop?: boolean;
+    maxRetainedTaskStates?: number;
+}
 
 /** 进程运行状态 */
 export type ProcessStatus = 'running' | 'stopped' | 'crashed';
@@ -171,8 +181,68 @@ const lastKnownState = new Map<
     { status: ProcessStatus; exitCode?: number | null }
 >();
 
-/** 每个任务保留的日志行数上限 */
-const MAX_TASK_LOG_LINES = 500;
+/** 每个任务保留的日志行数上限（可通过 configureRunner 覆盖） */
+let maxTaskLogLines = 500;
+
+/** 停止任务后是否清空日志缓冲 */
+let clearTaskLogsOnStop = false;
+
+/** 注入 dev 子进程的环境与 NODE_OPTIONS */
+let runnerTaskEnv: Record<string, string> = {};
+let runnerNodeOptions: string | undefined;
+
+/** 已结束 stopped 状态在内存中保留条数上限 */
+let maxRetainedTaskStates = 200;
+
+/**
+ * 应用启动器配置中的任务/日志选项
+ * @param opts - 来自 ResolvedConfig
+ */
+export function configureRunner(opts: RunnerOptions): void {
+    if (opts.maxTaskLogLines != null && opts.maxTaskLogLines > 0) {
+        maxTaskLogLines = Math.floor(opts.maxTaskLogLines);
+    }
+    if (opts.clearTaskLogsOnStop != null) {
+        clearTaskLogsOnStop = opts.clearTaskLogsOnStop;
+    }
+    if (opts.maxRetainedTaskStates != null && opts.maxRetainedTaskStates > 0) {
+        maxRetainedTaskStates = Math.floor(opts.maxRetainedTaskStates);
+    }
+    runnerTaskEnv = opts.taskEnv ?? {};
+    runnerNodeOptions = opts.nodeOptions;
+}
+
+/**
+ * 清理 stopped 任务的状态与日志，避免会话内 Map 无限增长
+ */
+export function pruneRunnerState(): void {
+    const running = new Set(processes.keys());
+
+    for (const id of [...taskLogs.keys()]) {
+        if (running.has(id)) continue;
+        const status = processes.has(id)
+            ? 'running'
+            : (lastKnownState.get(id)?.status ?? 'stopped');
+        if (status === 'stopped') {
+            taskLogs.delete(id);
+        }
+    }
+
+    const stoppedIds: string[] = [];
+    for (const [id, state] of lastKnownState) {
+        if (state.status === 'stopped' && !running.has(id)) {
+            stoppedIds.push(id);
+        }
+    }
+
+    const overflow = lastKnownState.size - maxRetainedTaskStates;
+    if (overflow > 0) {
+        const removeCount = Math.min(stoppedIds.length, overflow);
+        for (let i = 0; i < removeCount; i++) {
+            lastKnownState.delete(stoppedIds[i]);
+        }
+    }
+}
 
 /** 任务日志缓冲（刷新页面后可恢复） */
 const taskLogs = new Map<string, string[]>();
@@ -192,8 +262,8 @@ function recordLog(taskId: string, line: string): void {
         taskLogs.set(taskId, buf);
     }
     buf.push(line);
-    if (buf.length > MAX_TASK_LOG_LINES) {
-        buf.splice(0, buf.length - MAX_TASK_LOG_LINES);
+    if (buf.length > maxTaskLogLines) {
+        buf.splice(0, buf.length - maxTaskLogLines);
     }
     onLog(taskId, line);
 }
@@ -218,9 +288,14 @@ export function getTaskLogs(taskId: string): string[] {
  * 获取全部任务日志（供刷新后恢复）
  */
 export function getAllTaskLogs(): Record<string, string[]> {
+    pruneRunnerState();
     const out: Record<string, string[]> = {};
     for (const [id, lines] of taskLogs) {
-        if (lines.length) out[id] = [...lines];
+        if (!lines.length) continue;
+        const status = processes.has(id) ? 'running' : (lastKnownState.get(id)?.status ?? 'stopped');
+        if (status === 'running' || status === 'crashed') {
+            out[id] = [...lines];
+        }
     }
     return out;
 }
@@ -294,7 +369,10 @@ export function startTask(
     const proc = spawn(cmd, args, {
         cwd: resolvedCwd,
         detached: process.platform !== 'win32',
-        env: { ...process.env, FORCE_COLOR: '1' },
+        env: buildTaskSpawnEnv(process.env, {
+            taskEnv: runnerTaskEnv,
+            nodeOptions: runnerNodeOptions,
+        }),
         stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -423,6 +501,10 @@ export async function stopTask(taskId: string): Promise<boolean> {
     lastKnownState.set(taskId, { status: 'stopped' });
     onStatus(taskId, 'stopped');
     recordLog(taskId, '[dev-launcher] 已停止');
+    if (clearTaskLogsOnStop) {
+        clearTaskLogs(taskId);
+    }
+    pruneRunnerState();
     return true;
 }
 
@@ -483,4 +565,5 @@ export async function stopAll(): Promise<void> {
     for (const id of [...processes.keys()]) {
         await stopTask(id);
     }
+    pruneRunnerState();
 }
