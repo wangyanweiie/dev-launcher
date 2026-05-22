@@ -17,10 +17,18 @@
   "idleAutoStopMinutes": 0,
   "forceColor": true,
   "logSubscribeOnly": false,
-  "defaultTaskProfile": "",
+  "defaultTaskProfile": "balanced",
   "taskProfiles": {
+    "balanced": {
+      "nodeOptions": "--max-old-space-size=2560",
+      "taskEnv": {}
+    },
     "lowMemory": {
       "nodeOptions": "--max-old-space-size=1536",
+      "taskEnv": {}
+    },
+    "large": {
+      "nodeOptions": "--max-old-space-size=5120",
       "taskEnv": {}
     }
   },

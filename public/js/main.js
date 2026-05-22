@@ -9,7 +9,7 @@ import { bindCategoryTabs } from './events.js';
 import { bindServicesPanel } from './services.js';
 import { bindSidebarLogLayout } from './sidebar-layout.js';
 import { connectWs } from './websocket.js';
-import { initTaskProfiles } from './task-profile.js';
+import { applyLauncherFlags } from './state.js';
 import { bindLogPanelCollapse, clearLogPanel } from './log.js';
 import { bindThemeToggle, initTheme } from './theme.js';
 import { statuses, taskUrls, userCollapsed, userExpanded, setSearchQuery } from './state.js';
@@ -42,10 +42,10 @@ async function init() {
     try {
         cfg = await fetch('/api/config').then((r) => r.json());
         initScanRootBar(cfg);
-        initTaskProfiles(cfg);
+        applyLauncherFlags(cfg);
     } catch {
         initScanRootBar({ scanRoot: '', defaultScanRoot: '', scanOk: false });
-        initTaskProfiles({});
+        applyLauncherFlags({});
     }
 
     bindScanRootBar();

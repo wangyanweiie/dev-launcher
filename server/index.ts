@@ -18,7 +18,10 @@ import {
 } from './config.js';
 import { getCachedProjects, clearScanCache } from './scan-cache.js';
 import { initRuntime, getRuntimeConfig, reloadRuntimeConfig } from './runtime.js';
-import { resolveSpawnOptions } from './task-profiles.js';
+import {
+    resolveEffectiveTaskProfile,
+    resolveSpawnOptions,
+} from './task-profiles.js';
 import { persistScanRoot } from './settings.js';
 import { detectOrphanServices, killByPort, portFromUrl } from './orphans.js';
 import { readDefaults, setProjectDefault } from './defaults.js';
@@ -283,8 +286,6 @@ app.get('/api/config', (_req, res) => {
         scanError: scanCheck.ok ? undefined : scanCheck.error,
         scanRootFromEnv: !!process.env.DEV_LAUNCHER_SCAN_ROOT?.trim(),
         localHosts: getWifiIPv4Addresses(config.wifiIp),
-        taskProfileNames: Object.keys(config.taskProfiles),
-        defaultTaskProfile: config.defaultTaskProfile,
         maxRunningTasks: config.maxRunningTasks,
         idleAutoStopMinutes: config.idleAutoStopMinutes,
         logSubscribeOnly: config.logSubscribeOnly,
@@ -474,11 +475,10 @@ app.delete('/api/instances', (req, res) => {
 
 /** 启动指定 cwd 下的脚本 */
 app.post('/api/tasks/start', (req, res) => {
-    const { cwd, scriptName, packageManager, profile } = req.body as {
+    const { cwd, scriptName, packageManager } = req.body as {
         cwd?: string;
         scriptName?: string;
         packageManager?: 'pnpm' | 'npm' | 'yarn';
-        profile?: string;
     };
 
     if (!cwd || !scriptName || !packageManager) {
@@ -495,17 +495,8 @@ app.post('/api/tasks/start', (req, res) => {
 
     const id = taskId(resolvedCwd, scriptName);
     const config = getRuntimeConfig();
-    const explicitProfile = profile?.trim();
-    const profileName = explicitProfile || config.defaultTaskProfile || undefined;
-    if (explicitProfile && !config.taskProfiles[explicitProfile]) {
-        res.status(400).json({ error: `未知配置档: ${explicitProfile}` });
-        return;
-    }
     try {
-        const effectiveProfile =
-            profileName && config.taskProfiles[profileName]
-                ? profileName
-                : undefined;
+        const effectiveProfile = resolveEffectiveTaskProfile(config);
         const spawnOpts = resolveSpawnOptions(config, effectiveProfile);
         const result = startTask(
             id,

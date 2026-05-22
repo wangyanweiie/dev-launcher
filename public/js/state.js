@@ -8,6 +8,17 @@ import { normalizeTaskUrls } from './urls.js';
 /** @typedef {import('./types.js').SubProject} SubProject */
 /** @typedef {import('./types.js').ProjectGroup} ProjectGroup */
 
+/** 是否仅向已订阅任务推送 WebSocket 日志（来自 config.json） */
+export let logSubscribeOnly = false;
+
+/**
+ * 应用 /api/config 中的面板行为开关
+ * @param {object} cfg
+ */
+export function applyLauncherFlags(cfg) {
+    logSubscribeOnly = cfg?.logSubscribeOnly === true;
+}
+
 /** 各任务运行状态 */
 /** @type {Record<string, 'running' | 'stopped' | 'crashed'>} */
 export let statuses = {};

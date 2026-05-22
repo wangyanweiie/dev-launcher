@@ -1,8 +1,11 @@
 /**
- * 任务启动配置档：合并全局 taskEnv/nodeOptions 与命名 profile
+ * 任务启动配置档：合并全局 taskEnv/nodeOptions 与命名 profile（仅 config.json，无界面选择）
  */
 
 import type { ResolvedConfig } from './config.js';
+
+/** config 未指定 defaultTaskProfile 时的默认档名 */
+export const FALLBACK_TASK_PROFILE = 'balanced';
 
 /** 单个配置档 */
 export interface TaskProfile {
@@ -58,4 +61,20 @@ export function resolveSpawnOptions(
     }
 
     return { taskEnv, nodeOptions };
+}
+
+/**
+ * 解析本次启动使用的配置档名（defaultTaskProfile → balanced → 仅全局）
+ * @param config - 运行时配置
+ * @param explicitProfile - API 显式指定（一般不用）
+ */
+export function resolveEffectiveTaskProfile(
+    config: ResolvedConfig,
+    explicitProfile?: string,
+): string | undefined {
+    const name =
+        explicitProfile?.trim() ||
+        config.defaultTaskProfile?.trim() ||
+        FALLBACK_TASK_PROFILE;
+    return config.taskProfiles[name] ? name : undefined;
 }

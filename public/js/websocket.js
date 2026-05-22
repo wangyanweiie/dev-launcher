@@ -6,7 +6,7 @@ import { updateCardStates } from './tasks.js';
 import { appendLog, importLogs } from './log.js';
 import { statuses, taskUrls, taskExitCodes, activeLogTask } from './state.js';
 import { normalizeTaskUrls } from './urls.js';
-import { logSubscribeOnly } from './task-profile.js';
+import { logSubscribeOnly } from './state.js';
 
 /** @type {WebSocket | null} */
 let ws = null;

@@ -4,7 +4,11 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTaskProfiles, resolveSpawnOptions } from './task-profiles.js';
+import {
+    parseTaskProfiles,
+    resolveEffectiveTaskProfile,
+    resolveSpawnOptions,
+} from './task-profiles.js';
 import type { ResolvedConfig } from './config.js';
 
 describe('parseTaskProfiles', () => {
@@ -46,5 +50,30 @@ describe('resolveSpawnOptions', () => {
             o.nodeOptions,
             '--enable-source-maps --max-old-space-size=512',
         );
+    });
+});
+
+describe('resolveEffectiveTaskProfile', () => {
+    const config = {
+        defaultTaskProfile: '',
+        taskProfiles: {
+            balanced: { nodeOptions: '--max-old-space-size=2560' },
+        },
+    } as Pick<ResolvedConfig, 'defaultTaskProfile' | 'taskProfiles'>;
+
+    it('未配置 default 时使用 balanced', () => {
+        assert.equal(
+            resolveEffectiveTaskProfile(config as ResolvedConfig),
+            'balanced',
+        );
+    });
+
+    it('尊重 defaultTaskProfile', () => {
+        const c = {
+            ...config,
+            defaultTaskProfile: 'lowMemory',
+            taskProfiles: { ...config.taskProfiles, lowMemory: {} },
+        } as unknown as ResolvedConfig;
+        assert.equal(resolveEffectiveTaskProfile(c), 'lowMemory');
     });
 });

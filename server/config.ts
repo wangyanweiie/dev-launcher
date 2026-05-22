@@ -176,7 +176,7 @@ export function loadConfig(root: string): ResolvedConfig {
                 ? Math.floor(maxRetained)
                 : 200,
         taskProfiles,
-        defaultTaskProfile: raw.defaultTaskProfile?.trim() || '',
+        defaultTaskProfile: raw.defaultTaskProfile?.trim() || 'balanced',
         maxRunningTasks:
             Number.isFinite(maxRunning) && maxRunning >= 0
                 ? Math.floor(maxRunning)
