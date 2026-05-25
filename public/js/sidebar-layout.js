@@ -11,6 +11,8 @@ import {
     managedListEl,
     historyListEl,
     sidebarPanelEl,
+    servicesPanelEl,
+    servicesTabsEl,
 } from './dom.js';
 import { servicesSectionCollapsed } from './state.js';
 
@@ -44,6 +46,12 @@ function getSidebarViewportHeight() {
 function measureHeader(el) {
     if (!el) return DEFAULT_HEADER_PX;
     return el.getBoundingClientRect().height || DEFAULT_HEADER_PX;
+}
+
+/** 服务面板顶部 APP/PC Tab（可见时计入侧栏占用） */
+function measureServicesTabsChrome() {
+    if (!servicesTabsEl || servicesTabsEl.hidden) return 0;
+    return servicesTabsEl.getBoundingClientRect().height || 0;
 }
 
 /**
@@ -250,7 +258,7 @@ function applyPaneBodyLayout(pane, bodyMax) {
     pane.bodyEl.style.maxHeight = `${h}px`;
     pane.bodyEl.style.overflow = 'hidden';
     pane.scrollEl.style.maxHeight = `${h}px`;
-    pane.scrollEl.style.height = `${h}px`;
+    pane.scrollEl.style.height = '';
     pane.scrollEl.style.overflowY = 'auto';
 }
 
@@ -319,7 +327,7 @@ export function updateSidebarLogLayout() {
         clearPaneBodyLayout(p);
     }
 
-    let used = 0;
+    let used = measureServicesTabsChrome();
     for (const p of collapsed) {
         used += measureHeader(p.headerEl);
     }
@@ -334,10 +342,68 @@ export function updateSidebarLogLayout() {
         applyPaneBodyLayout(pane, bodyHeights[i] ?? MIN_BODY_PX);
     });
 
-    if (logPanelEl) {
-        const logExpanded = expanded.some((p) => p.id === 'log');
-        logPanelEl.style.flex = logExpanded ? '1 1 0' : '0 0 auto';
-        logPanelEl.style.minHeight = logExpanded ? '0' : '';
+    /** @param {SidebarPane} pane */
+    const bodyHeightForPane = (pane) => {
+        const idx = expanded.indexOf(pane);
+        if (idx < 0) return 0;
+        return bodyHeights[idx] ?? MIN_BODY_PX;
+    };
+
+    let servicesOuterH = measureServicesTabsChrome();
+    for (const p of panes) {
+        if (p.id === 'log') continue;
+        const headerH = measureHeader(p.headerEl);
+        servicesOuterH += headerH + (p.expanded ? bodyHeightForPane(p) : 0);
+    }
+
+    const logPane = panes.find((p) => p.id === 'log');
+    const logHeaderH = logPane ? measureHeader(logPane.headerEl) : 0;
+    const logOuterH =
+        logPane && logPane.expanded
+            ? logHeaderH + bodyHeightForPane(logPane)
+            : logHeaderH;
+
+    const servicesOuterPx = Math.ceil(servicesOuterH);
+    const logOuterPx = Math.ceil(logOuterH);
+    let servicesPx = servicesOuterPx;
+    let logPx = logOuterPx;
+
+    if (servicesPx + logPx > viewportH) {
+        if (logPane?.expanded) {
+            const minLogPx = logHeaderH + MIN_BODY_PX;
+            logPx = Math.max(minLogPx, viewportH - servicesPx);
+            if (servicesPx + logPx > viewportH) {
+                servicesPx = Math.max(0, viewportH - logPx);
+            }
+        } else {
+            servicesPx = Math.max(0, viewportH - logPx);
+        }
+    }
+
+    if (servicesPanelEl) {
+        servicesPanelEl.style.flex = '0 0 auto';
+        servicesPanelEl.style.flexShrink = '0';
+        servicesPanelEl.style.minHeight = '0';
+        servicesPanelEl.style.height = `${servicesPx}px`;
+        servicesPanelEl.style.maxHeight = `${servicesPx}px`;
+        servicesPanelEl.style.overflowY = servicesPx < servicesOuterPx ? 'auto' : 'hidden';
+        servicesPanelEl.style.overflowX = 'hidden';
+    }
+
+    if (logPanelEl && logPane) {
+        if (logPane.expanded) {
+            logPanelEl.style.flex = '0 0 auto';
+            logPanelEl.style.flexShrink = '0';
+            logPanelEl.style.height = `${logPx}px`;
+            logPanelEl.style.maxHeight = `${logPx}px`;
+            logPanelEl.style.minHeight = `${Math.ceil(logHeaderH + MIN_BODY_PX)}px`;
+        } else {
+            logPanelEl.style.flex = '0 0 auto';
+            logPanelEl.style.flexShrink = '0';
+            logPanelEl.style.height = '';
+            logPanelEl.style.maxHeight = '';
+            logPanelEl.style.minHeight = '';
+        }
     }
 }
 
@@ -365,6 +431,7 @@ export function bindSidebarLogLayout() {
 
     const ro = new ResizeObserver(scheduleSidebarLogLayout);
     if (sidebarPanelEl) ro.observe(sidebarPanelEl);
+    if (servicesTabsEl) ro.observe(servicesTabsEl);
     if (managedListEl) ro.observe(managedListEl);
     if (historyListEl) ro.observe(historyListEl);
     if (logBody) ro.observe(logBody);

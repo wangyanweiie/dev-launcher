@@ -830,10 +830,16 @@ body {
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     background: var(--surface);
     min-height: 0;
     width: 360px;
     overflow: hidden;
+}
+
+.sidebar-panel > .services-panel,
+.sidebar-panel > .log-panel {
+    flex-shrink: 0;
 }
 
 .services-panel {
@@ -849,6 +855,7 @@ body {
 .services-category-tabs {
     position: relative;
     flex-shrink: 0;
+    flex-grow: 0;
     display: flex;
     gap: 2px;
     margin: 0;
@@ -927,6 +934,8 @@ body {
 .services-section {
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
+    flex-grow: 0;
     min-height: 0;
     border-bottom: 1px solid var(--border);
 }
@@ -1143,9 +1152,10 @@ body {
 }
 
 .log-panel {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
     min-height: 0;
     overflow: hidden;
 }
